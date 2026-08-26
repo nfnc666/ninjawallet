@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 
-import { Button, NinjaLogo, ScreenBackground, TextField } from '@/components';
+import { Button, NinjaWordmark, ScreenBackground, TextField } from '@/components';
 import { WrongPasscodeError } from '@/wallet/keystore';
 import { useWallet } from '@/wallet/WalletContext';
-import { colors, spacing, typography } from '@/theme';
+import { spacing } from '@/theme';
 
 /**
  * figma 249:2834 — the sign-in screen, reworked: this wallet has no account to
@@ -60,8 +60,7 @@ export default function Unlock() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.brand}>
-          <NinjaLogo size={96} />
-          <Text style={styles.wordmark}>Ninja Wallet</Text>
+          <NinjaWordmark width={230} />
         </View>
 
         <TextField
@@ -108,10 +107,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.lg,
     marginBottom: spacing.xl,
-  },
-  wordmark: {
-    ...typography.headline,
-    color: colors.text,
   },
   footer: {
     paddingBottom: spacing.xl,

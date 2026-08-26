@@ -91,13 +91,18 @@ Built from Figma file `YNkaMjKBBi046LgXOj3VIJ`, section
 from the file's variables and node properties — see the `figma:` comments in
 `src/theme/index.ts`.
 
-The logo is the real artwork, machine-traced: `assets/logo-source.png` →
-`scripts/trace-logo.py` (potrace) → the path data in
-`src/components/NinjaLogo.tsx`. Re-run the script if the artwork changes:
+Both brand marks are the real artwork, machine-traced. `NinjaLogo` is the mark
+on its black disc; `NinjaWordmark` is the full lockup with the drawn wordmark —
+use it rather than pairing the mark with a text label, since "Ninja Wallet" is
+drawn type, not a system font.
+
+`src/components/NinjaLogo.tsx` and `NinjaWordmark.tsx` are **generated**. Edit
+the PNGs, not the path data:
 
 ```bash
 pip install pillow numpy potracer
-python3 scripts/trace-logo.py assets/logo-source.png ./out
+python3 scripts/trace-logo.py           # regenerate both components
+python3 scripts/trace-logo.py --check   # fail if they are out of sync
 ```
 
 One gap remains, because the build environment's network policy blocks
