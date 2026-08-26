@@ -105,11 +105,12 @@ python3 scripts/trace-logo.py           # regenerate both components
 python3 scripts/trace-logo.py --check   # fail if they are out of sync
 ```
 
-One gap remains, because the build environment's network policy blocks
-`figma.com` and the file's exported assets could not be downloaded:
-
-- **Coin icons are redrawn or monogrammed.** Bitcoin and Ethereum use their
-  published brand geometry; other coins fall back to a branded initial.
+Coin icons are constructed rather than exported, since the network policy also
+blocks the Figma icon assets: Bitcoin and Tether are typographic (₿, ₮),
+Ethereum, Binance and Solana are polygons, Cardano is its generated dot
+lattice, USDC its dollar glyph. A symbol with no mark falls back to a branded
+monogram — that fallback is a placeholder, not a design, so add the geometry in
+`CoinIcon.tsx` when a new asset starts being listed.
 
 The design's screens for buy, sell, staking, NFTs, referrals, and support are
 not built — this is the onboarding and core-wallet slice.

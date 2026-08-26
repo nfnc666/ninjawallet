@@ -1,17 +1,19 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { colors, layout } from '@/theme';
 
 /**
  * Coin marks.
  *
- * The Figma file's icons are exported assets we cannot fetch from this
- * environment, so Bitcoin and Ethereum are redrawn here from their published
- * brand geometry and everything else falls back to a branded monogram. Swap in
- * the real exports when the design assets are available — the sizing contract
- * (40pt outer circle, 22pt glyph) matches the design's `icon` node.
+ * The Figma file's icon exports are unreachable from this environment, so each
+ * mark is constructed from its published brand geometry instead: Bitcoin and
+ * Tether are typographic (₿, ₮), Ethereum, Binance and Solana are polygons,
+ * Cardano is its dot lattice, USDC its dollar glyph. Anything without a mark
+ * falls back to a branded monogram, which is a placeholder, not a design.
+ *
+ * Sizing follows the design's `icon` node: a 40pt circle with the glyph at 55%.
  */
 
 export interface CoinBrand {
@@ -26,7 +28,7 @@ const BRANDS: Record<string, CoinBrand> = {
   USDT: { background: '#26A17B', foreground: '#FFFFFF' },
   USDC: { background: '#2775CA', foreground: '#FFFFFF' },
   BNB: { background: '#F3BA2F', foreground: '#FFFFFF' },
-  SOL: { background: '#14F195', foreground: '#0B0B0B' },
+  SOL: { background: '#0B0B0B', foreground: '#14F195' },
   ADA: { background: '#0033AD', foreground: '#FFFFFF' },
 };
 
@@ -56,15 +58,51 @@ export function CoinIcon({ symbol, size = layout.iconSize }: CoinIconProps) {
   );
 }
 
+/** A diamond (square on its corner) centred at cx,cy with half-diagonal d. */
+function diamond(cx: number, cy: number, d: number): string {
+  return `M${cx} ${cy - d}L${cx + d} ${cy}L${cx} ${cy + d}L${cx - d} ${cy}Z`;
+}
+
+/**
+ * Cardano's mark is a lattice of dots: one centre, a ring of six, and an outer
+ * ring of twelve, each ring smaller than the last. Generating it beats
+ * transcribing thirty-odd circle coordinates by hand.
+ */
+const CARDANO_DOTS: { cx: number; cy: number; r: number }[] = [
+  { cx: 12, cy: 12, r: 1.9 },
+  ...Array.from({ length: 6 }, (_, i) => {
+    const angle = (i * 60 * Math.PI) / 180;
+    return {
+      cx: 12 + Math.cos(angle) * 5.1,
+      cy: 12 + Math.sin(angle) * 5.1,
+      r: 1.55,
+    };
+  }),
+  ...Array.from({ length: 12 }, (_, i) => {
+    const angle = ((i * 30 + 15) * Math.PI) / 180;
+    return {
+      cx: 12 + Math.cos(angle) * 9.4,
+      cy: 12 + Math.sin(angle) * 9.4,
+      r: 1.15,
+    };
+  }),
+];
+
 function CoinGlyph({ symbol, size, color }: { symbol: string; size: number; color: string }) {
+  // Bitcoin and Tether are typographic marks; rendering the character keeps
+  // the stroke weights right at every size.
   if (symbol === 'BTC') {
-    // The Bitcoin ₿ is a typographic mark; rendering the character keeps the
-    // stroke weights right at every size.
     return <Text style={[styles.glyph, { fontSize: size, color }]}>₿</Text>;
+  }
+  if (symbol === 'USDT') {
+    return <Text style={[styles.glyph, { fontSize: size, color }]}>₮</Text>;
+  }
+  if (symbol === 'USDC') {
+    return <Text style={[styles.glyph, { fontSize: size * 0.95, color }]}>$</Text>;
   }
 
   if (symbol === 'ETH' || symbol === 'SepoliaETH') {
-    // Ethereum's diamond: two stacked faces, upper one split down the middle.
+    // Ethereum's diamond: two stacked faces, the upper one split down the middle.
     return (
       <Svg width={size} height={size} viewBox="0 0 24 24">
         <Path d="M12 1.5 5.5 12.3 12 16.1 18.5 12.3Z" fill={color} opacity={0.75} />
@@ -75,9 +113,47 @@ function CoinGlyph({ symbol, size, color }: { symbol: string; size: number; colo
     );
   }
 
-  return (
-    <Text style={[styles.glyph, { fontSize: size * 0.8, color }]}>{symbol.slice(0, 1)}</Text>
-  );
+  if (symbol === 'BNB') {
+    // Binance: a centre diamond with four satellites on the cardinal points.
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path d={diamond(12, 12, 3.6)} fill={color} />
+        <Path d={diamond(12, 5.4, 3.1)} fill={color} />
+        <Path d={diamond(12, 18.6, 3.1)} fill={color} />
+        <Path d={diamond(5.4, 12, 3.1)} fill={color} />
+        <Path d={diamond(18.6, 12, 3.1)} fill={color} />
+      </Svg>
+    );
+  }
+
+  if (symbol === 'SOL') {
+    // Solana: three bars, the middle one skewed against the outer two.
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path d="M7 5.6H20.5L17 8.9H3.5Z" fill={color} />
+        <Path d="M3.5 10.35H17L20.5 13.65H7Z" fill={color} />
+        <Path d="M7 15.1H20.5L17 18.4H3.5Z" fill={color} />
+      </Svg>
+    );
+  }
+
+  if (symbol === 'ADA') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        {CARDANO_DOTS.map((dot, index) => (
+          <Circle
+            key={index}
+            cx={Number(dot.cx.toFixed(2))}
+            cy={Number(dot.cy.toFixed(2))}
+            r={dot.r}
+            fill={color}
+          />
+        ))}
+      </Svg>
+    );
+  }
+
+  return <Text style={[styles.glyph, { fontSize: size * 0.8, color }]}>{symbol.slice(0, 1)}</Text>;
 }
 
 const styles = StyleSheet.create({
