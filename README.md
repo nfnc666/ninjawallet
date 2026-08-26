@@ -103,7 +103,15 @@ the PNGs, not the path data:
 pip install pillow numpy potracer
 python3 scripts/trace-logo.py           # regenerate both components
 python3 scripts/trace-logo.py --check   # fail if they are out of sync
+python3 scripts/make-icons.py           # regenerate launcher/splash/favicon assets
 ```
+
+Positioning note: the mark's size comes from its ink, but its *placement* comes
+from the artboard. The artwork deliberately sits left of centre in its square —
+the wallet is centred and the orange swoosh overhangs — so centring the ink
+bounding box instead pushes the whole mark right inside the disc. `trace-logo.py`
+also asserts the ink stays clear of the disc edge, so new artwork fails loudly
+rather than getting silently clipped.
 
 Coin icons are constructed rather than exported, since the network policy also
 blocks the Figma icon assets: Bitcoin and Tether are typographic (₿, ₮),

@@ -104,8 +104,16 @@ def build_disc_logo():
     x0, x1, y0, y1 = bounds(lc, oc)
 
     viewbox, inset = 128.0, 21.0
+    # Size comes from the ink, so the mark fills the disc consistently...
     scale = (viewbox - 2 * inset) / max(x1 - x0, y1 - y0)
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+
+    # ...but position comes from the artboard, not the ink. The artist centred
+    # the wallet and let the orange swoosh overhang to the left, which leaves
+    # the ink deliberately off centre in its square (63px left, measured).
+    # Centring the ink bbox instead shoves the whole mark right inside the disc.
+    with Image.open(ROOT / 'assets' / 'logo-source.png') as art:
+        art_w, art_h = art.size
+    cx, cy = (art_w - 1) / 2, (art_h - 1) / 2
 
     def t(p):
         return (
@@ -113,7 +121,24 @@ def build_disc_logo():
             round((p[1] - cy) * scale + viewbox / 2, 2),
         )
 
+    assert_fits_disc(lc, oc, t, viewbox / 2)
     return emit(lc, t), emit(oc, t)
+
+
+def assert_fits_disc(light_curves, orange_curves, transform, radius):
+    """Fail loudly if new artwork would spill outside the disc."""
+    worst = 0.0
+    for curves in (light_curves, orange_curves):
+        for start, segs in curves:
+            for point in [start, *(p for _, ps in segs for p in ps)]:
+                x, y = transform(point)
+                worst = max(worst, ((x - radius) ** 2 + (y - radius) ** 2) ** 0.5)
+    print(f'  disc fit: furthest ink is {worst:.1f} of {radius:.0f} units from centre')
+    if worst > radius - 4:
+        raise SystemExit(
+            f'Artwork extends {worst:.1f} units from the disc centre but the disc '
+            f'radius is {radius:.0f}. Increase INSET or recentre the source art.'
+        )
 
 
 def build_wordmark():

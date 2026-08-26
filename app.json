@@ -12,6 +12,15 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#190E23"
+        }
+      ],
+      [
         "expo-secure-store",
         {
           "configureAndroidBackup": false,
@@ -32,7 +41,7 @@
     "android": {
       "package": "com.ninjawallet.app",
       "adaptiveIcon": {
-        "backgroundColor": "#190E23",
+        "backgroundColor": "#0B0B0B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
