@@ -91,14 +91,18 @@ Built from Figma file `YNkaMjKBBi046LgXOj3VIJ`, section
 from the file's variables and node properties — see the `figma:` comments in
 `src/theme/index.ts`.
 
-Two gaps, both because the build environment's network policy blocks
-`figma.com` and the exported assets could not be downloaded:
+The logo is the real artwork, machine-traced: `assets/logo-source.png` →
+`scripts/trace-logo.py` (potrace) → the path data in
+`src/components/NinjaLogo.tsx`. Re-run the script if the artwork changes:
 
-- **`NinjaLogo` is redrawn, not the export.** Traced from the design's own
-  render of node 249:2615 — same composition (masked ninja peeking out of the
-  wallet, scarf streaming left, sparkles), proportions and palette, but an
-  approximation of the curves rather than the original vector. Swap in the real
-  export when it is available; the component's sizing contract does not change.
+```bash
+pip install pillow numpy potracer
+python3 scripts/trace-logo.py assets/logo-source.png ./out
+```
+
+One gap remains, because the build environment's network policy blocks
+`figma.com` and the file's exported assets could not be downloaded:
+
 - **Coin icons are redrawn or monogrammed.** Bitcoin and Ethereum use their
   published brand geometry; other coins fall back to a branded initial.
 
