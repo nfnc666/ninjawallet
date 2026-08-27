@@ -21,7 +21,7 @@ npm run ios        # or android
 Checks:
 
 ```bash
-npm test           # 82 tests, incl. BIP-39/44/84 vectors
+npm test           # 103 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -41,7 +41,8 @@ npm run lint
 | Bitcoin address (BIP-84, `bc1…`) | Real — derived from the same seed |
 | Bitcoin balance / send | **Not implemented** — receive-only |
 | Swap | **Not implemented** — screen is laid out, button disabled |
-| Prices, charts, portfolio value in USD | **Not implemented** — no price feed |
+| Spot prices and USD value | Real — live feed, mainnet only |
+| Price charts | **Not implemented** — needs historical series |
 | Transaction history | **Not implemented** — links out to a block explorer |
 
 Nothing in the "not implemented" rows is faked in the UI. A balance you cannot
@@ -85,6 +86,12 @@ Decisions worth knowing about before trusting this with anything:
 - **Public RPC endpoints are the default.** They see every address you query.
   Set `EXPO_PUBLIC_SEPOLIA_RPC_URL` / `EXPO_PUBLIC_ETHEREUM_RPC_URL` to your own
   node for anything real.
+- **Testnet balances never get a fiat figure.** Sepolia ether does not trade, so
+  there is no honest dollar value for it; the card shows the coin amount and
+  says the funds are not real money. A test asserts a `$` never appears there.
+- **A missing price is not a price of zero.** An asset the feed did not return
+  is left blank rather than defaulted, and a non-finite value is rejected before
+  it can reach a balance line.
 
 ## Layout
 

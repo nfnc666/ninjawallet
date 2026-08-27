@@ -108,6 +108,12 @@ describe('portfolio', () => {
     expect(text).toContain('Receive only');
   });
 
+  it('never shows a dollar figure on a testnet', () => {
+    // Sepolia ether does not trade. Any fiat number here would be invented.
+    const text = textOf(render(Portfolio as React.ComponentType).root);
+    expect(text).not.toContain('$');
+  });
+
   it('shows a dash, not a zero, when the node could not be reached', () => {
     mockBalance.value = null as never;
     mockBalance.error = 'Network request failed' as never;

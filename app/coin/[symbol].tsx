@@ -6,6 +6,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Button, Card, CoinIcon, ScreenBackground, ScreenHeader } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
 import { formatCoin } from '@/wallet/chain';
+import { fiatValue, formatUsd, networkHasFiatValue } from '@/wallet/prices';
+import { usePrices } from '@/wallet/usePrices';
 import { useBalance } from '@/wallet/useBalance';
 import { useWallet } from '@/wallet/WalletContext';
 import { colors, spacing, typography } from '@/theme';
@@ -13,9 +15,9 @@ import { colors, spacing, typography } from '@/theme';
 /**
  * figma 140:1495 ("coin view") — hero mark, balance, send/receive, activity.
  *
- * The design's price chart and percentage change are not rendered: this build
- * has no price feed, and drawing a plausible-looking chart from nothing would
- * be inventing market data.
+ * The spot price is real. The design's price *chart* is still not drawn — that
+ * needs historical series, and sketching a plausible-looking curve from a
+ * single spot price would be inventing market data.
  */
 export default function CoinDetail() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
@@ -25,6 +27,14 @@ export default function CoinDetail() {
   const asset = assetsForNetwork(network).find((candidate) => candidate.symbol === symbol);
   const isNative = symbol === network.currencySymbol;
   const address = symbol === 'BTC' ? addresses?.bitcoin : addresses?.evm;
+
+  const showFiat = networkHasFiatValue(network);
+  const { prices } = usePrices(showFiat ? [symbol] : []);
+  const price = prices[symbol];
+  const holdingFiat =
+    isNative && balance.value !== null && price !== undefined
+      ? fiatValue(balance.value, network.currencyDecimals, price)
+      : null;
 
   return (
     <ScreenBackground glow>
@@ -50,7 +60,15 @@ export default function CoinDetail() {
               ? `${formatCoin(balance.value, network)} ${symbol}`
               : `— ${symbol}`}
           </Text>
+          {holdingFiat !== null ? (
+            <Text style={styles.fiat}>{formatUsd(holdingFiat)}</Text>
+          ) : null}
+
           <Text style={styles.network}>{isNative ? network.name : 'Bitcoin mainnet'}</Text>
+
+          {price !== undefined ? (
+            <Text style={styles.spot}>1 {symbol} = {formatUsd(price)}</Text>
+          ) : null}
         </View>
 
         <View style={styles.actions}>
@@ -112,6 +130,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   network: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+  },
+  fiat: {
+    ...typography.title,
+    color: colors.text,
+  },
+  spot: {
     ...typography.bodySmall,
     color: colors.textMuted,
   },

@@ -7,20 +7,35 @@ import { router } from 'expo-router';
 import { CoinIcon, CoinRow, ScreenBackground } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
 import { formatCoin, shortenAddress } from '@/wallet/chain';
+import { fiatValue, formatUsd, networkHasFiatValue } from '@/wallet/prices';
+import { usePrices } from '@/wallet/usePrices';
 import { useBalance } from '@/wallet/useBalance';
 import { useWallet } from '@/wallet/WalletContext';
 import { colors, radius, spacing, typography } from '@/theme';
 
 /**
  * figma 249:680 ("get started v2") — balance card over the action row and the
- * asset list. Balances here are live chain reads, so the card shows the coin
- * amount rather than the design's fiat total: this build has no price feed and
- * a made-up dollar figure would be a lie.
+ * asset list.
+ *
+ * The fiat total is shown only on mainnet. Testnet coins do not trade, so a
+ * dollar figure for them would be invented; the card shows the coin amount and
+ * says so instead.
  */
 export default function Portfolio() {
   const { network, addresses } = useWallet();
   const balance = useBalance(network, addresses?.evm ?? null);
   const assets = assetsForNetwork(network);
+
+  const showFiat = networkHasFiatValue(network);
+  const { prices, error: priceError } = usePrices(
+    showFiat ? assets.map((asset) => asset.symbol) : [],
+  );
+
+  const nativePrice = prices[network.currencySymbol];
+  const nativeFiat =
+    balance.value !== null && nativePrice !== undefined
+      ? fiatValue(balance.value, network.currencyDecimals, nativePrice)
+      : null;
 
   return (
     <ScreenBackground glow>
@@ -57,7 +72,7 @@ export default function Portfolio() {
           style={styles.balanceCard}
         >
           <Text style={styles.balanceLabel}>
-            {network.isMainnet ? 'Total balance' : 'Test balance — not real money'}
+            {showFiat ? 'Total balance' : 'Test balance — not real money'}
           </Text>
 
           <Text style={styles.balanceValue} accessibilityRole="text">
@@ -65,8 +80,22 @@ export default function Portfolio() {
               ? balance.error !== null
                 ? '—'
                 : 'Loading…'
-              : `${formatCoin(balance.value, network)} ${network.currencySymbol}`}
+              : nativeFiat !== null
+                ? formatUsd(nativeFiat)
+                : `${formatCoin(balance.value, network)} ${network.currencySymbol}`}
           </Text>
+
+          {nativeFiat !== null && balance.value !== null ? (
+            <Text style={styles.balanceSub}>
+              {formatCoin(balance.value, network)} {network.currencySymbol}
+            </Text>
+          ) : null}
+
+          {showFiat && nativeFiat === null && balance.value !== null ? (
+            <Text style={styles.balanceSub}>
+              {priceError ?? 'Price unavailable'} — showing coin amount only
+            </Text>
+          ) : null}
 
           {addresses !== null ? (
             <Text style={styles.address}>{shortenAddress(addresses.evm)}</Text>
@@ -98,6 +127,7 @@ export default function Portfolio() {
         <View style={styles.assets}>
           {assets.map((asset) => {
             const isNative = asset.symbol === network.currencySymbol;
+            const rowFiat = isNative ? nativeFiat : null;
             return (
               <CoinRow
                 key={asset.symbol}
@@ -108,6 +138,7 @@ export default function Portfolio() {
                     ? `${formatCoin(balance.value, network)} ${asset.symbol}`
                     : undefined
                 }
+                value={rowFiat !== null ? formatUsd(rowFiat) : undefined}
                 note={asset.note}
                 onPress={() => router.push(`/coin/${asset.symbol}`)}
               />
@@ -186,6 +217,11 @@ const styles = StyleSheet.create({
   balanceValue: {
     ...typography.displayLarge,
     color: colors.text,
+  },
+  balanceSub: {
+    ...typography.bodySmall,
+    color: colors.text,
+    opacity: 0.9,
   },
   address: {
     ...typography.bodySmall,
