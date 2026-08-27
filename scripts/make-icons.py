@@ -37,22 +37,49 @@ def cutout() -> Image.Image:
     return Image.fromarray(out, 'RGBA')
 
 
-def trimmed(img: Image.Image) -> Image.Image:
-    box = img.getbbox()
-    return img.crop(box) if box else img
+def white_centre(mark: Image.Image) -> tuple[float, float, float]:
+    """Centre the mark on its white block, and the reach of the furthest ink.
+
+    Same rule as scripts/trace-logo.py: the eye centres a mark on its visual
+    mass, so the orange swoosh and the sparkles count as overhang rather than
+    as part of what gets centred. Keeping both in step is what stops the
+    launcher icon from drifting away from the in-app logo.
+    """
+    a = np.array(mark)
+    alpha = a[:, :, 3]
+    ink = alpha > 8
+    # White block: opaque and not strongly orange.
+    r, g, b = a[:, :, 0].astype(int), a[:, :, 1].astype(int), a[:, :, 2].astype(int)
+    white = ink & ~((r > 150) & (b < 110) & ((r - b) > 90))
+
+    ys, xs = np.nonzero(white)
+    cx = (xs.min() + xs.max()) / 2
+    cy = (ys.min() + ys.max()) / 2
+
+    iy, ix = np.nonzero(ink)
+    reach = float(np.max(np.hypot(ix - cx, iy - cy)))
+    return cx, cy, reach
 
 
 def placed(mark: Image.Image, canvas: int, coverage: float, background) -> Image.Image:
-    """Scale `mark` to `coverage` of `canvas` and centre it on `background`."""
-    art = trimmed(mark)
-    scale = (canvas * coverage) / max(art.size)
-    art = art.resize(
-        (max(1, round(art.width * scale)), max(1, round(art.height * scale))),
+    """Centre `mark` on `background`, scaled so its ink reaches `coverage`.
+
+    `coverage` is measured as a fraction of the canvas half-width, matching how
+    `fill` works in trace-logo.py.
+    """
+    cx, cy, reach = white_centre(mark)
+    scale = (canvas / 2 * coverage) / reach
+
+    scaled = mark.resize(
+        (max(1, round(mark.width * scale)), max(1, round(mark.height * scale))),
         Image.LANCZOS,
     )
 
     base = Image.new('RGBA', (canvas, canvas), background)
-    base.paste(art, ((canvas - art.width) // 2, (canvas - art.height) // 2), art)
+    base.alpha_composite(
+        scaled,
+        (round(canvas / 2 - cx * scale), round(canvas / 2 - cy * scale)),
+    )
     return base
 
 
@@ -68,15 +95,17 @@ def main() -> None:
 
     outputs = [
         # iOS / general launcher icon: the artwork's own black field, full bleed.
-        ('icon.png', placed(mark, 1024, 0.74, (*DISC, 255))),
+        ('icon.png', placed(mark, 1024, 0.84, (*DISC, 255))),
         # Android adaptive: the foreground is masked to roughly the inner 66%,
         # so the mark has to stay well inside that.
-        ('android-icon-foreground.png', placed(mark, 1024, 0.56, (0, 0, 0, 0))),
+        ('android-icon-foreground.png', placed(mark, 1024, 0.62, (0, 0, 0, 0))),
         ('android-icon-background.png', Image.new('RGBA', (1024, 1024), (*DISC, 255))),
-        ('android-icon-monochrome.png', placed(silhouette(mark), 1024, 0.56, (0, 0, 0, 0))),
+        # Whitened AFTER placing: silhouette() erases the colour that white_centre
+        # keys on, so anchoring it first would centre it differently.
+        ('android-icon-monochrome.png', silhouette(placed(mark, 1024, 0.62, (0, 0, 0, 0)))),
         # Splash: drawn over the brand background set in app.json.
-        ('splash-icon.png', placed(mark, 1024, 0.52, (0, 0, 0, 0))),
-        ('favicon.png', placed(mark, 64, 0.78, (*BRAND_BG, 255))),
+        ('splash-icon.png', placed(mark, 1024, 0.60, (0, 0, 0, 0))),
+        ('favicon.png', placed(mark, 64, 0.86, (*BRAND_BG, 255))),
     ]
 
     for name, image in outputs:

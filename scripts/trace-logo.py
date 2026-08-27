@@ -61,6 +61,94 @@ def trace(mask):
     return curves
 
 
+def convex_hull(points):
+    """Andrew's monotone chain."""
+    pts = sorted(set(points))
+    if len(pts) <= 2:
+        return pts
+
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) >= 2:
+                (x1, y1), (x2, y2) = out[-2], out[-1]
+                if (x2 - x1) * (p[1] - y1) - (y2 - y1) * (p[0] - x1) <= 0:
+                    out.pop()
+                else:
+                    break
+            out.append(p)
+        return out
+
+    return half(pts)[:-1] + half(pts[::-1])[:-1]
+
+
+def min_enclosing_circle(points):
+    """Smallest circle containing every point, as ((cx, cy), radius).
+
+    The hull of this artwork is a few dozen points, so every candidate circle
+    through two or three of them is checked exhaustively. That is exact and
+    obviously correct, which matters more here than the asymptotics.
+    """
+    hull = convex_hull(points)
+    if not hull:
+        raise ValueError('no points')
+    if len(hull) == 1:
+        return hull[0], 0.0
+
+    def covers(centre, radius):
+        cx, cy = centre
+        return all(
+            (px - cx) ** 2 + (py - cy) ** 2 <= radius ** 2 + 1e-6 for px, py in hull
+        )
+
+    best = None
+    n = len(hull)
+    for i in range(n):
+        for j in range(i + 1, n):
+            (ax, ay), (bx, by) = hull[i], hull[j]
+            centre = ((ax + bx) / 2, (ay + by) / 2)
+            radius = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5 / 2
+            if covers(centre, radius) and (best is None or radius < best[1]):
+                best = (centre, radius)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            for k in range(j + 1, n):
+                circle = circumcircle(hull[i], hull[j], hull[k])
+                if circle is None:
+                    continue
+                centre, radius = circle
+                if covers(centre, radius) and (best is None or radius < best[1]):
+                    best = (centre, radius)
+
+    if best is None:
+        raise ValueError('no enclosing circle found')
+    return best
+
+
+def circumcircle(a, b, c):
+    ax, ay = a
+    bx, by = b
+    cx, cy = c
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-12:
+        return None
+    a2, b2, c2 = ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy
+    ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d
+    uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d
+    return (ux, uy), ((ax - ux) ** 2 + (ay - uy) ** 2) ** 0.5
+
+
+def all_points(*curve_sets):
+    pts = []
+    for curves in curve_sets:
+        for start, segs in curves:
+            pts.append(start)
+            for _, ps in segs:
+                pts.extend(ps)
+    return pts
+
+
 def bounds(*curve_sets):
     pts = []
     for curves in curve_sets:
@@ -101,27 +189,38 @@ def build_disc_logo():
     """The square mark on its black disc, normalised into a 128 viewBox."""
     light, orange = masks(ROOT / 'assets' / 'logo-source.png')
     lc, oc = trace(light), trace(orange)
-    x0, x1, y0, y1 = bounds(lc, oc)
 
-    viewbox, inset = 128.0, 21.0
-    # Size comes from the ink, so the mark fills the disc consistently...
-    scale = (viewbox - 2 * inset) / max(x1 - x0, y1 - y0)
+    viewbox = 128.0
+    disc_r = viewbox / 2
+    # How far the outermost ink may reach, as a fraction of the disc radius.
+    # Only the swoosh tip and a sparkle get near this; the wallet sits well in.
+    fill = 0.84
 
-    # ...but position comes from the artboard, not the ink. The artist centred
-    # the wallet and let the orange swoosh overhang to the left, which leaves
-    # the ink deliberately off centre in its square (63px left, measured).
-    # Centring the ink bbox instead shoves the whole mark right inside the disc.
-    with Image.open(ROOT / 'assets' / 'logo-source.png') as art:
-        art_w, art_h = art.size
-    cx, cy = (art_w - 1) / 2, (art_h - 1) / 2
+    # Centre on the WHITE block — the wallet and banknotes — not on all the ink.
+    # The eye centres a mark on its visual mass, and the orange swoosh and the
+    # sparkles are overhang: including them drags the centre left and up, which
+    # is what made the mark sit low and right inside the disc. Two other rules
+    # were tried and rejected: the full ink bounding box (worse, same reason)
+    # and the artwork's smallest enclosing circle (optimises for the outermost
+    # sparkle, so it pushes the wallet off centre the other way).
+    white_pts = all_points(lc)
+    xs = [p[0] for p in white_pts]
+    ys = [p[1] for p in white_pts]
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+
+    # Scale so the furthest ink from that centre lands exactly on the fill line.
+    reach = max(
+        ((p[0] - cx) ** 2 + (p[1] - cy) ** 2) ** 0.5 for p in all_points(lc, oc)
+    )
+    scale = (disc_r * fill) / reach
 
     def t(p):
         return (
-            round((p[0] - cx) * scale + viewbox / 2, 2),
-            round((p[1] - cy) * scale + viewbox / 2, 2),
+            round((p[0] - cx) * scale + disc_r, 2),
+            round((p[1] - cy) * scale + disc_r, 2),
         )
 
-    assert_fits_disc(lc, oc, t, viewbox / 2)
+    assert_fits_disc(lc, oc, t, disc_r)
     return emit(lc, t), emit(oc, t)
 
 

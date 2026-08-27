@@ -106,12 +106,14 @@ python3 scripts/trace-logo.py --check   # fail if they are out of sync
 python3 scripts/make-icons.py           # regenerate launcher/splash/favicon assets
 ```
 
-Positioning note: the mark's size comes from its ink, but its *placement* comes
-from the artboard. The artwork deliberately sits left of centre in its square —
-the wallet is centred and the orange swoosh overhangs — so centring the ink
-bounding box instead pushes the whole mark right inside the disc. `trace-logo.py`
-also asserts the ink stays clear of the disc edge, so new artwork fails loudly
-rather than getting silently clipped.
+Positioning note: the mark is centred on its **white block** — the wallet and
+banknotes — not on all of its ink. The eye centres a mark on its visual mass,
+so the orange swoosh and the sparkles count as overhang. Two other rules were
+tried and rejected: the full ink bounding box and the artwork's smallest
+enclosing circle both let those outliers drag the wallet off centre inside the
+disc. `trace-logo.py` also asserts the ink clears the disc edge, so new artwork
+fails loudly rather than getting silently clipped, and `make-icons.py` anchors
+the launcher icons the same way so they cannot drift from the in-app logo.
 
 Coin icons are constructed rather than exported, since the network policy also
 blocks the Figma icon assets: Bitcoin and Tether are typographic (₿, ₮),
