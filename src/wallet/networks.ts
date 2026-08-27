@@ -14,6 +14,12 @@ export interface NetworkConfig {
   readonly rpcUrl: string;
   readonly explorerTxUrl: (hash: string) => string;
   readonly explorerAddressUrl: (address: string) => string;
+  /**
+   * Blockscout API base for transaction history. Blockscout is used rather
+   * than Etherscan because its API needs no key, so history works out of the
+   * box instead of behind a signup.
+   */
+  readonly historyApiUrl: string;
   /** False for testnets — drives the "test funds only" messaging. */
   readonly isMainnet: boolean;
   /** Where users can get free test coins, when there is such a place. */
@@ -43,6 +49,7 @@ export const NETWORKS: Record<NetworkId, NetworkConfig> = {
     rpcUrl: SEPOLIA_RPC,
     explorerTxUrl: (hash) => `https://sepolia.etherscan.io/tx/${hash}`,
     explorerAddressUrl: (address) => `https://sepolia.etherscan.io/address/${address}`,
+    historyApiUrl: 'https://eth-sepolia.blockscout.com/api/v2',
     isMainnet: false,
     faucetUrl: 'https://sepoliafaucet.com',
   },
@@ -55,6 +62,7 @@ export const NETWORKS: Record<NetworkId, NetworkConfig> = {
     rpcUrl: ETHEREUM_RPC,
     explorerTxUrl: (hash) => `https://etherscan.io/tx/${hash}`,
     explorerAddressUrl: (address) => `https://etherscan.io/address/${address}`,
+    historyApiUrl: 'https://eth.blockscout.com/api/v2',
     isMainnet: true,
   },
 };

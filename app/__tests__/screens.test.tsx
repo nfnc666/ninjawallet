@@ -30,6 +30,12 @@ const mockWallet = {
   network: jest.requireActual('@/wallet/networks').NETWORKS.sepolia,
 };
 const mockBalance = { value: parseEther('1.5'), loading: false, error: null, refresh: jest.fn() };
+const mockHistory = {
+  entries: [] as unknown[],
+  loading: false,
+  error: null as string | null,
+  refresh: jest.fn(),
+};
 
 jest.mock('expo-router', () => ({
   router: mockRouter,
@@ -45,6 +51,8 @@ jest.mock('@/wallet/WalletContext', () => ({
 }));
 
 jest.mock('@/wallet/useBalance', () => ({ useBalance: () => mockBalance }));
+
+jest.mock('@/wallet/useHistory', () => ({ useHistory: () => mockHistory }));
 
 jest.mock('react-native-qrcode-svg', () => 'QRCode');
 
@@ -84,6 +92,9 @@ beforeEach(() => {
   mockParams.symbol = 'SepoliaETH';
   mockBalance.value = parseEther('1.5');
   mockBalance.error = null;
+  mockHistory.entries = [];
+  mockHistory.error = null;
+  mockHistory.loading = false;
 });
 
 describe('portfolio', () => {
@@ -173,9 +184,33 @@ describe('coin detail', () => {
     expect(text).toContain('1.5 SepoliaETH');
   });
 
-  it('says history is not indexed rather than showing an empty list', () => {
+  it('says the list is empty rather than showing nothing at all', () => {
     const text = textOf(render(Coin as React.ComponentType).root);
-    expect(text).toMatch(/not indexed/i);
+    expect(text).toMatch(/no transactions yet/i);
+  });
+
+  it('surfaces a history failure instead of showing it as an empty history', () => {
+    mockHistory.error = 'Explorer returned 500.';
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toContain('Explorer returned 500.');
+    expect(text).not.toMatch(/no transactions yet/i);
+  });
+
+  it('lists transactions when there are some', () => {
+    mockHistory.entries = [
+      {
+        hash: '0xabc',
+        direction: 'out',
+        value: parseEther('0.25'),
+        counterparty: '0x6Fac4D18c912343BF86fa7049364Dd4E424Ab9C0',
+        timestamp: new Date(Date.now() - 120_000),
+        succeeded: true,
+        fee: 1n,
+      },
+    ];
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toContain('Sent');
+    expect(text).toContain('0.25 SepoliaETH');
   });
 
   it('marks Bitcoin as receive-only and shows no balance for it', () => {

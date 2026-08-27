@@ -21,7 +21,7 @@ npm run ios        # or android
 Checks:
 
 ```bash
-npm test           # 103 tests, incl. BIP-39/44/84 vectors
+npm test           # 123 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -43,7 +43,7 @@ npm run lint
 | Swap | **Not implemented** — screen is laid out, button disabled |
 | Spot prices and USD value | Real — live feed, mainnet only |
 | Price charts | **Not implemented** — needs historical series |
-| Transaction history | **Not implemented** — links out to a block explorer |
+| Transaction history | Real — Blockscout, keyless |
 
 Nothing in the "not implemented" rows is faked in the UI. A balance you cannot
 verify is worse than no balance, so those screens say what they cannot do.
@@ -92,6 +92,10 @@ Decisions worth knowing about before trusting this with anything:
 - **A missing price is not a price of zero.** An asset the feed did not return
   is left blank rather than defaulted, and a non-finite value is rejected before
   it can reach a balance line.
+- **Third-party APIs see your addresses.** The default price and history
+  endpoints are public services; every lookup tells them which addresses you
+  hold. `EXPO_PUBLIC_PRICE_API_URL` and `EXPO_PUBLIC_HISTORY_API_URL` point both
+  at your own instance.
 
 ## Layout
 

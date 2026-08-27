@@ -1,14 +1,23 @@
 import React from 'react';
-import { Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { Button, Card, CoinIcon, ScreenBackground, ScreenHeader } from '@/components';
+import { Button, Card, CoinIcon, HistoryRow, ScreenBackground, ScreenHeader } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
 import { formatCoin } from '@/wallet/chain';
 import { fiatValue, formatUsd, networkHasFiatValue } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
 import { useBalance } from '@/wallet/useBalance';
+import { useHistory } from '@/wallet/useHistory';
 import { useWallet } from '@/wallet/WalletContext';
 import { colors, spacing, typography } from '@/theme';
 
@@ -28,6 +37,8 @@ export default function CoinDetail() {
   const isNative = symbol === network.currencySymbol;
   const address = symbol === 'BTC' ? addresses?.bitcoin : addresses?.evm;
 
+  const history = useHistory(network, isNative ? (addresses?.evm ?? null) : null);
+
   const showFiat = networkHasFiatValue(network);
   const { prices } = usePrices(showFiat ? [symbol] : []);
   const price = prices[symbol];
@@ -46,8 +57,11 @@ export default function CoinDetail() {
         refreshControl={
           isNative ? (
             <RefreshControl
-              refreshing={balance.loading}
-              onRefresh={balance.refresh}
+              refreshing={balance.loading || history.loading}
+              onRefresh={() => {
+                balance.refresh();
+                history.refresh();
+              }}
               tintColor={colors.text}
             />
           ) : undefined
@@ -97,19 +111,49 @@ export default function CoinDetail() {
         ) : null}
 
         <Text style={styles.sectionTitle}>Activity</Text>
-        <Card style={styles.activity}>
-          <Text style={styles.activityText}>
-            Transaction history is not indexed in this build. Your full history is public on the
-            chain — open the explorer to read it.
-          </Text>
-          {address !== undefined && address !== null && isNative ? (
-            <Button
-              label="Open in explorer"
-              variant="ghost"
-              onPress={() => Linking.openURL(network.explorerAddressUrl(address))}
-            />
-          ) : null}
-        </Card>
+
+        {!isNative ? (
+          <Card style={styles.activity}>
+            <Text style={styles.activityText}>
+              This build does not read the {symbol} chain, so there is no activity to show. Your
+              history is public — open a {symbol} explorer to read it.
+            </Text>
+          </Card>
+        ) : history.error !== null ? (
+          <Card style={styles.activity}>
+            <Text style={styles.activityText}>{history.error}</Text>
+            <Button label="Try again" variant="ghost" onPress={history.refresh} />
+          </Card>
+        ) : history.loading && history.entries.length === 0 ? (
+          <Card style={styles.activity}>
+            <ActivityIndicator color={colors.text} />
+          </Card>
+        ) : history.entries.length === 0 ? (
+          <Card style={styles.activity}>
+            <Text style={styles.activityText}>
+              No transactions yet. Anything you send or receive will show up here.
+            </Text>
+          </Card>
+        ) : (
+          <View style={styles.historyList}>
+            {history.entries.map((entry) => (
+              <HistoryRow
+                key={entry.hash}
+                entry={entry}
+                network={network}
+                onPress={() => Linking.openURL(network.explorerTxUrl(entry.hash))}
+              />
+            ))}
+          </View>
+        )}
+
+        {address !== undefined && address !== null && isNative ? (
+          <Button
+            label="Open in explorer"
+            variant="ghost"
+            onPress={() => Linking.openURL(network.explorerAddressUrl(address))}
+          />
+        ) : null}
       </ScrollView>
     </ScreenBackground>
   );
@@ -165,6 +209,9 @@ const styles = StyleSheet.create({
   activity: {
     gap: spacing.lg,
     padding: spacing.lg,
+  },
+  historyList: {
+    gap: spacing.md,
   },
   activityText: {
     ...typography.bodySmall,
