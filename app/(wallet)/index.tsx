@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { CoinIcon, CoinRow, ScreenBackground } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
 import { formatCoin, shortenAddress } from '@/wallet/chain';
-import { fiatValue, formatUsd, networkHasFiatValue } from '@/wallet/prices';
+import { fiatValue, formatFiat, networkHasFiatValue } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
 import { useBalance } from '@/wallet/useBalance';
 import { useWallet } from '@/wallet/WalletContext';
@@ -22,13 +22,14 @@ import { colors, radius, spacing, typography } from '@/theme';
  * says so instead.
  */
 export default function Portfolio() {
-  const { network, addresses } = useWallet();
+  const { network, addresses, currency } = useWallet();
   const balance = useBalance(network, addresses?.evm ?? null);
   const assets = assetsForNetwork(network);
 
   const showFiat = networkHasFiatValue(network);
   const { prices, error: priceError } = usePrices(
     showFiat ? assets.map((asset) => asset.symbol) : [],
+    currency,
   );
 
   const nativePrice = prices[network.currencySymbol];
@@ -81,7 +82,7 @@ export default function Portfolio() {
                 ? '—'
                 : 'Loading…'
               : nativeFiat !== null
-                ? formatUsd(nativeFiat)
+                ? formatFiat(nativeFiat, currency)
                 : `${formatCoin(balance.value, network)} ${network.currencySymbol}`}
           </Text>
 
@@ -131,6 +132,11 @@ export default function Portfolio() {
           />
           <ActionButton icon="layers-outline" label="Stake" onPress={() => router.push('/stake')} />
           <ActionButton icon="images-outline" label="NFTs" onPress={() => router.push('/nfts')} />
+          <ActionButton
+            icon="trending-up-outline"
+            label="Markets"
+            onPress={() => router.push('/market')}
+          />
         </View>
 
         <Text style={styles.sectionTitle}>Assets</Text>
@@ -149,7 +155,7 @@ export default function Portfolio() {
                     ? `${formatCoin(balance.value, network)} ${asset.symbol}`
                     : undefined
                 }
-                value={rowFiat !== null ? formatUsd(rowFiat) : undefined}
+                value={rowFiat !== null ? formatFiat(rowFiat, currency) : undefined}
                 note={asset.note}
                 onPress={() => router.push(`/coin/${asset.symbol}`)}
               />

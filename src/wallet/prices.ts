@@ -1,3 +1,4 @@
+import { DEFAULT_CURRENCY, findCurrency, type CurrencyCode } from './currency';
 import type { NetworkConfig } from './networks';
 
 /**
@@ -51,12 +52,15 @@ export class PriceUnavailableError extends Error {
  * defaulted to zero — a missing price and a price of zero mean very different
  * things to someone deciding whether to send funds.
  */
-export async function fetchPrices(symbols: string[]): Promise<Record<string, number>> {
+export async function fetchPrices(
+  symbols: string[],
+  currency: CurrencyCode = DEFAULT_CURRENCY,
+): Promise<Record<string, number>> {
   const wanted = symbols.filter(isPriceable);
   if (wanted.length === 0) return {};
 
   const ids = [...new Set(wanted.map((symbol) => COIN_IDS[symbol] as string))];
-  const url = `${PRICE_API_URL}?ids=${ids.join(',')}&vs_currencies=usd`;
+  const url = `${PRICE_API_URL}?ids=${ids.join(',')}&vs_currencies=${currency}`;
 
   const headers: Record<string, string> = { accept: 'application/json' };
   if (PRICE_API_KEY) headers['x-cg-pro-api-key'] = PRICE_API_KEY;
@@ -69,15 +73,15 @@ export async function fetchPrices(symbols: string[]): Promise<Record<string, num
     throw new PriceUnavailableError(`Price service returned ${response.status}.`);
   }
 
-  const body = (await response.json()) as Record<string, { usd?: number } | undefined>;
+  const body = (await response.json()) as Record<string, Record<string, number> | undefined>;
 
   const prices: Record<string, number> = {};
   for (const symbol of wanted) {
     const id = COIN_IDS[symbol] as string;
-    const usd = body[id]?.usd;
+    const value = body[id]?.[currency];
     // Reject anything non-finite rather than letting NaN reach a balance line.
-    if (typeof usd === 'number' && Number.isFinite(usd) && usd >= 0) {
-      prices[symbol] = usd;
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      prices[symbol] = value;
     }
   }
   return prices;
@@ -96,13 +100,19 @@ export function fiatValue(amount: bigint, decimals: number, usdPrice: number): n
   return (Number(scaled) / Number(precision)) * usdPrice;
 }
 
-/** Formats a USD amount the way a balance line should read. */
-export function formatUsd(value: number): string {
+/**
+ * Formats a fiat amount the way a balance line should read.
+ *
+ * Sub-unit amounts get more precision, because rounding 0.0123 to 0.01 hides
+ * most of what is there.
+ */
+export function formatFiat(value: number, currency: CurrencyCode = DEFAULT_CURRENCY): string {
   if (!Number.isFinite(value)) return '—';
   const fractionDigits = value !== 0 && Math.abs(value) < 1 ? 4 : 2;
+  const code = findCurrency(currency)?.label ?? 'USD';
   return value.toLocaleString('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: code,
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });
