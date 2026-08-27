@@ -181,6 +181,20 @@ export default function Settings() {
           </Pressable>
         </Section>
 
+        <Section title="Support">
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/support')}
+            accessibilityRole="button"
+          >
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Help</Text>
+              <Text style={styles.rowSubtitle}>What can and cannot be recovered</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+        </Section>
+
         <Button label="Erase wallet from this device" variant="ghost" onPress={handleErase} />
 
         <Text style={styles.disclaimer}>

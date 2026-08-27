@@ -26,11 +26,12 @@ Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 | `EXPO_PUBLIC_PRICE_API_URL` / `EXPO_PUBLIC_PRICE_API_KEY` | Use your own price feed |
 | `EXPO_PUBLIC_HISTORY_API_URL` | Use your own Blockscout instance |
 | `EXPO_PUBLIC_0X_API_KEY` | **Required for swapping** — nothing else needs a key |
+| `EXPO_PUBLIC_ONRAMP_URL` | Use a different fiat ramp provider |
 
 Checks:
 
 ```bash
-npm test           # 159 tests, incl. BIP-39/44/84 vectors
+npm test           # 172 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -53,6 +54,10 @@ npm run lint
 | Spot prices and USD value | Real — live feed, mainnet only |
 | Price charts | **Not implemented** — needs historical series |
 | Transaction history | Real — Blockscout, keyless |
+| NFT gallery | Real — Blockscout, keyless |
+| Buy / sell with fiat | Real handoff — opens a licensed ramp, address prefilled |
+| Staking | Informational — explains the routes, does not stake for you |
+| Help | Real — answers what a support desk would field |
 
 Nothing in the "not implemented" rows is faked in the UI. A balance you cannot
 verify is worse than no balance, so those screens say what they cannot do.
@@ -168,5 +173,15 @@ lattice, USDC its dollar glyph. A symbol with no mark falls back to a branded
 monogram — that fallback is a placeholder, not a design, so add the geometry in
 `CoinIcon.tsx` when a new asset starts being listed.
 
-The design's screens for buy, sell, staking, NFTs, referrals, and support are
-not built — this is the onboarding and core-wallet slice.
+Referrals and the in-app support chat are the remaining design screens that are
+not built. The chat is deliberate: there is no support desk behind this build,
+and a chat box that goes nowhere is worst at exactly the moment someone is
+panicking about funds. `app/support.tsx` answers those questions directly
+instead, and says plainly that anyone contacting you as "Ninja Wallet support"
+is an impostor.
+
+Staking is informational for the same kind of reason. Every route sends funds
+into someone else's contract or custody, this build is unaudited, and the
+design's headline yields are numbers no honest build can quote without a live
+source — so it explains the trade-offs and hands off rather than printing an
+APR someone might act on.

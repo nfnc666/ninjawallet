@@ -122,6 +122,17 @@ export default function Portfolio() {
           />
         </View>
 
+        <View style={styles.moreRow}>
+          <ActionButton icon="card-outline" label="Buy" onPress={() => router.push('/buy')} />
+          <ActionButton
+            icon="cash-outline"
+            label="Sell"
+            onPress={() => router.push({ pathname: '/buy', params: { side: 'sell' } })}
+          />
+          <ActionButton icon="layers-outline" label="Stake" onPress={() => router.push('/stake')} />
+          <ActionButton icon="images-outline" label="NFTs" onPress={() => router.push('/nfts')} />
+        </View>
+
         <Text style={styles.sectionTitle}>Assets</Text>
 
         <View style={styles.assets}>
@@ -234,6 +245,10 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   actions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  moreRow: {
     flexDirection: 'row',
     gap: spacing.md,
   },
