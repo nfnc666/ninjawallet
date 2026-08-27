@@ -18,10 +18,19 @@ npm start          # then scan the QR code with Expo Go
 npm run ios        # or android
 ```
 
+Optional configuration, all via `EXPO_PUBLIC_*` env vars:
+
+| Variable | Effect |
+| --- | --- |
+| `EXPO_PUBLIC_SEPOLIA_RPC_URL` / `EXPO_PUBLIC_ETHEREUM_RPC_URL` | Use your own node |
+| `EXPO_PUBLIC_PRICE_API_URL` / `EXPO_PUBLIC_PRICE_API_KEY` | Use your own price feed |
+| `EXPO_PUBLIC_HISTORY_API_URL` | Use your own Blockscout instance |
+| `EXPO_PUBLIC_0X_API_KEY` | **Required for swapping** — nothing else needs a key |
+
 Checks:
 
 ```bash
-npm test           # 123 tests, incl. BIP-39/44/84 vectors
+npm test           # 159 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -40,7 +49,7 @@ npm run lint
 | Ethereum send | Real — gas estimate, EIP-1559, signed and broadcast |
 | Bitcoin address (BIP-84, `bc1…`) | Real — derived from the same seed |
 | Bitcoin balance / send | **Not implemented** — receive-only |
-| Swap | **Not implemented** — screen is laid out, button disabled |
+| Swap | Real — 0x aggregator, needs an API key, mainnet only |
 | Spot prices and USD value | Real — live feed, mainnet only |
 | Price charts | **Not implemented** — needs historical series |
 | Transaction history | Real — Blockscout, keyless |
@@ -92,6 +101,14 @@ Decisions worth knowing about before trusting this with anything:
 - **A missing price is not a price of zero.** An asset the feed did not return
   is left blank rather than defaulted, and a non-finite value is rejected before
   it can reach a balance line.
+- **Approvals are for the exact amount, never unlimited.** Infinite approvals
+  are convenient and are also how a later contract bug drains a wallet months
+  after the trade. The cost is one approval per swap.
+- **Slippage above 5% is refused.** Looser than that is far more likely to be a
+  mistake than an intent, and it is exactly what a sandwich attack feeds on.
+- **An incoherent quote is not signed.** A quote whose minimum output exceeds
+  its expected output, or whose minimum cannot be read at all, is rejected —
+  signing one would mean agreeing to any output whatsoever.
 - **Third-party APIs see your addresses.** The default price and history
   endpoints are public services; every lookup tells them which addresses you
   hold. `EXPO_PUBLIC_PRICE_API_URL` and `EXPO_PUBLIC_HISTORY_API_URL` point both
