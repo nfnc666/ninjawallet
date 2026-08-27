@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import TestRenderer, { act, type ReactTestInstance } from 'react-test-renderer';
 import { parseEther } from 'ethers';
 
@@ -10,6 +10,10 @@ import { parseEther } from 'ethers';
  * Each test asserts on visible text, so a screen that renders but shows the
  * wrong figure still fails.
  */
+
+// Babel checks mock factories statically and only allows `mock`-prefixed
+// names from module scope, hence the alias.
+const mockUseEffect = useEffect;
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() };
 const mockParams = { symbol: 'SepoliaETH' };
@@ -40,6 +44,7 @@ const mockHistory = {
 jest.mock('expo-router', () => ({
   router: mockRouter,
   useLocalSearchParams: () => mockParams,
+  useFocusEffect: (effect: () => void) => mockUseEffect(effect, [effect]),
   Redirect: () => null,
   Stack: { Screen: () => null },
   Tabs: Object.assign(() => null, { Screen: () => null }),
@@ -160,6 +165,13 @@ describe('receive', () => {
 describe('send', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Send = () => require('../send/[symbol]').default();
+
+  it('offers a scan button, so an address never has to be typed', () => {
+    const tree = render(Send as React.ComponentType);
+    expect(
+      tree.root.findAllByProps({ accessibilityLabel: 'Scan a QR code' }).length,
+    ).toBeGreaterThan(0);
+  });
 
   it('offers the transfer form for the native coin', () => {
     const text = textOf(render(Send as React.ComponentType).root);

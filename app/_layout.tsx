@@ -27,6 +27,7 @@ export default function RootLayout() {
           <Stack.Screen name="send/[symbol]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="receive/[symbol]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="buy" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="scan" options={{ presentation: 'modal' }} />
         </Stack>
       </WalletProvider>
     </SafeAreaProvider>

@@ -32,7 +32,7 @@ Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 Checks:
 
 ```bash
-npm test           # 194 tests, incl. BIP-39/44/84 vectors
+npm test           # 216 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -63,6 +63,8 @@ npm run lint
 | Markets / top gainers | Real — live prices and 24h moves, keyless |
 | Security screen | Real — backup, and honest about what is not a toggle |
 | Terms | Real — states what the software does and does not do |
+| QR scanner for addresses | Real — EIP-681 and BIP-21, refuses what it cannot read |
+| Device sync with a desktop app | **Not implemented** — needs a pairing protocol |
 
 Nothing in the "not implemented" rows is faked in the UI. A balance you cannot
 verify is worse than no balance, so those screens say what they cannot do.
@@ -119,6 +121,12 @@ Decisions worth knowing about before trusting this with anything:
 - **An incoherent quote is not signed.** A quote whose minimum output exceeds
   its expected output, or whose minimum cannot be read at all, is rejected —
   signing one would mean agreeing to any output whatsoever.
+- **A QR code is parsed, never scraped.** Payment codes are read as EIP-681 or
+  BIP-21; anything else is refused rather than guessed at. Lifting the first
+  address-shaped run out of arbitrary text risks picking up a different address
+  than the payload means, and a contract call (`…/transfer`) is rejected
+  outright — reading one as a plain transfer would send ether to a token
+  contract.
 - **Third-party APIs see your addresses.** The default price and history
   endpoints are public services; every lookup tells them which addresses you
   hold. `EXPO_PUBLIC_PRICE_API_URL` and `EXPO_PUBLIC_HISTORY_API_URL` point both
