@@ -21,7 +21,7 @@ npm run ios        # or android
 Checks:
 
 ```bash
-npm test           # 54 tests, incl. BIP-39/44/84 vectors
+npm test           # 82 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -46,6 +46,24 @@ npm run lint
 
 Nothing in the "not implemented" rows is faked in the UI. A balance you cannot
 verify is worse than no balance, so those screens say what they cannot do.
+
+## Tests
+
+`npm test` covers three things worth calling out:
+
+- **Derivation against the published vectors.** BIP-39 phrase generation and
+  the BIP-44 / BIP-84 addresses are checked against the specs' own test
+  vectors. If these ever drift, phrases created here stop restoring in other
+  wallets — the worst bug this codebase can have.
+- **The money path.** `chain-transfer.test.ts` runs the real quoting and
+  signing logic against a fake node: the balance guard at the exact boundary
+  and one wei past it, the pre-EIP-1559 gasPrice fallback, refusing to guess a
+  fee when the node returns none, chain-id pinning, and that a short balance or
+  a malformed recipient never reaches a broadcast.
+- **The screens behind the lock.** Portfolio, send, receive and coin detail
+  cannot be opened in a browser, because the wallet refuses to run without a
+  device keychain. `app/__tests__/screens.test.tsx` renders them against a
+  mocked wallet and asserts on visible text, so they are not shipped unseen.
 
 ## Security notes
 
