@@ -10,13 +10,23 @@ platform keychain. There is no account, no server, and no backup service.
 > broadcasts real transactions. It ships pointed at the Sepolia testnet on
 > purpose. Do not put funds on mainnet that you are not willing to lose.
 
-## Running it
+## Running it on a phone
+
+Install **Expo Go** from the App Store or Play Store, then, on a computer on
+the same Wi-Fi:
 
 ```bash
 npm install
-npm start          # then scan the QR code with Expo Go
-npm run ios        # or android
+npm start          # scan the QR code with Expo Go (iOS: the Camera app)
 ```
+
+Every native module this app uses ships inside Expo Go, so there is no build
+step and no Xcode or Android Studio. That is deliberate: a wallet nobody can
+start is a wallet nobody can check. `npm run ios` / `npm run android` open a
+simulator instead, if you have one.
+
+It starts on the Sepolia testnet. Get free test coins from the faucet linked in
+Settings and send one to yourself before trusting it with anything else.
 
 Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 
@@ -33,7 +43,7 @@ Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 Checks:
 
 ```bash
-npm test           # 304 tests, incl. BIP-39/44/84 vectors
+npm test           # 311 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```

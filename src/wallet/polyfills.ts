@@ -1,13 +1,41 @@
+import { getRandomValues } from 'expo-crypto';
+
 /**
  * Crypto polyfills. This module MUST be imported before anything that touches
  * `ethers`, because ethers' key generation reaches for `crypto.getRandomValues`
  * at call time and Hermes does not ship one.
  *
- * `react-native-get-random-values` installs a CSPRNG backed by the platform
- * (SecRandomCopyBytes on iOS, SecureRandom on Android). Importing it for its
- * side effect is the documented usage.
+ * The source is expo-crypto, which is backed by the platform CSPRNG
+ * (SecRandomCopyBytes on iOS, SecureRandom on Android) — the same guarantee
+ * `react-native-get-random-values` gives, and the reason this is a safe swap.
+ * expo-crypto is part of the Expo SDK, so it is present in Expo Go: the app
+ * runs on a phone by scanning a QR code, with no native build to produce
+ * first. A wallet nobody can start is a wallet nobody can check.
  */
-import 'react-native-get-random-values';
+function installGetRandomValues(): void {
+  const existing = globalThis.crypto as { getRandomValues?: unknown } | undefined;
+
+  // A runtime that already has one — Node under Jest, a browser — keeps it.
+  if (typeof existing?.getRandomValues === 'function') return;
+
+  if (existing !== undefined) {
+    try {
+      (existing as { getRandomValues: typeof getRandomValues }).getRandomValues = getRandomValues;
+      if (typeof globalThis.crypto.getRandomValues === 'function') return;
+    } catch {
+      // A frozen `crypto` object; replace it whole below.
+    }
+  }
+
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    enumerable: false,
+    writable: true,
+    value: { getRandomValues },
+  });
+}
+
+installGetRandomValues();
 
 // Hermes has had TextEncoder/TextDecoder since RN 0.74, but the Jest
 // environment and older runtimes may not. ethers needs both to hash UTF-8
