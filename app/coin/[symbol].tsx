@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -11,15 +12,25 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { Button, Card, CoinIcon, HistoryRow, ScreenBackground, ScreenHeader } from '@/components';
+import {
+  Button,
+  Card,
+  CoinIcon,
+  HistoryRow,
+  PriceChart,
+  ScreenBackground,
+  ScreenHeader,
+} from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
 import { formatCoin } from '@/wallet/chain';
 import { fiatValue, formatFiat, networkHasFiatValue } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
+import { usePriceSeries } from '@/wallet/usePriceSeries';
+import { CHART_RANGES, DEFAULT_RANGE, type ChartRangeId } from '@/wallet/chartData';
 import { useBalance } from '@/wallet/useBalance';
 import { useHistory } from '@/wallet/useHistory';
 import { useWallet } from '@/wallet/WalletContext';
-import { colors, spacing, typography } from '@/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 
 /**
  * figma 140:1495 ("coin view") — hero mark, balance, send/receive, activity.
@@ -39,8 +50,11 @@ export default function CoinDetail() {
 
   const history = useHistory(network, isNative ? (addresses?.evm ?? null) : null);
 
+  const [range, setRange] = useState<ChartRangeId>(DEFAULT_RANGE);
+
   const showFiat = networkHasFiatValue(network);
   const { prices } = usePrices(showFiat ? [symbol] : [], currency);
+  const chart = usePriceSeries(showFiat ? symbol : null, range, currency);
   const price = prices[symbol];
   const holdingFiat =
     isNative && balance.value !== null && price !== undefined
@@ -84,6 +98,41 @@ export default function CoinDetail() {
             <Text style={styles.spot}>1 {symbol} = {formatFiat(price, currency)}</Text>
           ) : null}
         </View>
+
+        {showFiat ? (
+          <View style={styles.chartBlock}>
+            {chart.error !== null ? (
+              <Card style={styles.notice}>
+                <Text style={styles.noticeText}>{chart.error}</Text>
+                <Button label="Try again" variant="ghost" onPress={chart.refresh} />
+              </Card>
+            ) : chart.series !== null ? (
+              <PriceChart series={chart.series} currency={currency} />
+            ) : (
+              <View style={styles.chartLoading}>
+                <ActivityIndicator color={colors.text} />
+              </View>
+            )}
+
+            <View style={styles.ranges}>
+              {CHART_RANGES.map((entry) => (
+                <Pressable
+                  key={entry.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: entry.id === range }}
+                  onPress={() => setRange(entry.id)}
+                  style={[styles.rangePill, entry.id === range && styles.rangePillActive]}
+                >
+                  <Text
+                    style={[styles.rangeText, entry.id === range && styles.rangeTextActive]}
+                  >
+                    {entry.id}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.actions}>
           <Button
@@ -185,6 +234,19 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.textMuted,
   },
+  chartBlock: { gap: spacing.md },
+  chartLoading: { height: 180, alignItems: 'center', justifyContent: 'center' },
+  ranges: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between' },
+  rangePill: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
+  rangePillActive: { backgroundColor: colors.text },
+  rangeText: { ...typography.caption, color: colors.textMuted },
+  rangeTextActive: { color: colors.textInverse },
   actions: {
     flexDirection: 'row',
     gap: spacing.md,
