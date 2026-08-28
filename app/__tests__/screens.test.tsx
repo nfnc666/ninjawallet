@@ -46,6 +46,19 @@ const mockHistory = {
   error: null as string | null,
   refresh: jest.fn(),
 };
+const mockBitcoin = {
+  balance: { confirmed: 25_000_000n, pending: 0n, txCount: 2 } as unknown,
+  entries: [] as unknown[],
+  loading: false,
+  error: null as string | null,
+  refresh: jest.fn(),
+};
+const mockPrices = {
+  prices: { BTC: 40_000 } as Record<string, number>,
+  loading: false,
+  error: null as string | null,
+  refresh: jest.fn(),
+};
 
 jest.mock('expo-router', () => ({
   router: mockRouter,
@@ -64,6 +77,10 @@ jest.mock('@/wallet/WalletContext', () => ({
 jest.mock('@/wallet/useBalance', () => ({ useBalance: () => mockBalance }));
 
 jest.mock('@/wallet/useHistory', () => ({ useHistory: () => mockHistory }));
+
+jest.mock('@/wallet/useBitcoin', () => ({ useBitcoin: () => mockBitcoin }));
+
+jest.mock('@/wallet/usePrices', () => ({ usePrices: () => mockPrices }));
 
 jest.mock('@/wallet/usePriceSeries', () => ({ usePriceSeries: () => mockChart }));
 
@@ -108,6 +125,11 @@ beforeEach(() => {
   mockHistory.entries = [];
   mockHistory.error = null;
   mockHistory.loading = false;
+  mockBitcoin.balance = { confirmed: 25_000_000n, pending: 0n, txCount: 2 };
+  mockBitcoin.entries = [];
+  mockBitcoin.error = null;
+  mockBitcoin.loading = false;
+  mockPrices.prices = { BTC: 40_000 };
 });
 
 describe('portfolio', () => {
@@ -126,14 +148,30 @@ describe('portfolio', () => {
     expect(text).toMatch(/not real money/i);
   });
 
-  it('lists Bitcoin as receive-only rather than showing a balance for it', () => {
+  it('shows the real Bitcoin balance and still says it cannot send it', () => {
     const text = textOf(render(Portfolio as React.ComponentType).root);
-    expect(text).toContain('Bitcoin');
+    expect(text).toContain('0.25 BTC');
     expect(text).toContain('Receive only');
   });
 
-  it('never shows a dollar figure on a testnet', () => {
-    // Sepolia ether does not trade. Any fiat number here would be invented.
+  it('shows no Bitcoin balance when the explorer could not be reached', () => {
+    mockBitcoin.balance = null;
+    mockBitcoin.error = 'Bitcoin explorer returned 503.';
+    const text = textOf(render(Portfolio as React.ComponentType).root);
+    expect(text).not.toContain('0 BTC');
+  });
+
+  it('values Bitcoin even on a testnet, because that address is on mainnet', () => {
+    // The BIP-84 address is derived on mainnet whatever the EVM side is set
+    // to, so the coins behind it are real and so is their value.
+    const text = textOf(render(Portfolio as React.ComponentType).root);
+    expect(text).toContain('$10,000');
+  });
+
+  it('never puts a fiat figure on the testnet coin', () => {
+    // Sepolia ether does not trade. Any fiat number for it would be invented.
+    mockBitcoin.balance = null;
+    mockPrices.prices = {};
     const text = textOf(render(Portfolio as React.ComponentType).root);
     expect(text).not.toContain('$');
   });
@@ -233,10 +271,51 @@ describe('coin detail', () => {
     expect(text).toContain('0.25 SepoliaETH');
   });
 
-  it('marks Bitcoin as receive-only and shows no balance for it', () => {
+  it('shows the real Bitcoin balance, read from the bitcoin chain', () => {
     mockParams.symbol = 'BTC';
     const text = textOf(render(Coin as React.ComponentType).root);
-    expect(text).toContain('— BTC');
-    expect(text).toMatch(/receive-only/i);
+    expect(text).toContain('0.25 BTC');
+    expect(text).toContain('Bitcoin mainnet');
+  });
+
+  it('says Bitcoin cannot be sent from here rather than leaving a dead button', () => {
+    mockParams.symbol = 'BTC';
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toMatch(/sending needs coin selection/i);
+  });
+
+  it('keeps unconfirmed bitcoin out of the balance and says so', () => {
+    mockParams.symbol = 'BTC';
+    mockBitcoin.balance = { confirmed: 25_000_000n, pending: 5_000_000n, txCount: 3 };
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toContain('0.25 BTC');
+    expect(text).toMatch(/\+0\.05 BTC unconfirmed/);
+  });
+
+  it('lists bitcoin transactions in BTC, not in ether', () => {
+    mockParams.symbol = 'BTC';
+    mockBitcoin.entries = [
+      {
+        hash: 'ff',
+        direction: 'in',
+        value: 12_000_000n,
+        counterparty: 'bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3',
+        timestamp: new Date(Date.now() - 120_000),
+        succeeded: true,
+        fee: null,
+      },
+    ];
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toContain('0.12 BTC');
+    expect(text).toContain('Received');
+  });
+
+  it('surfaces a bitcoin explorer failure instead of an empty history', () => {
+    mockParams.symbol = 'BTC';
+    mockBitcoin.balance = null;
+    mockBitcoin.error = 'Bitcoin explorer is rate limiting. Try again shortly.';
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toMatch(/rate limiting/i);
+    expect(text).not.toMatch(/no transactions yet/i);
   });
 });

@@ -3,18 +3,18 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { formatWhen, type HistoryEntry } from '@/wallet/history';
-import { formatCoin, shortenAddress } from '@/wallet/chain';
-import type { NetworkConfig } from '@/wallet/networks';
+import { formatAmount, shortenAddress, type CoinUnit } from '@/wallet/chain';
 import { colors, radius, spacing, typography } from '@/theme';
 
 interface HistoryRowProps {
   entry: HistoryEntry;
-  network: NetworkConfig;
+  /** Which coin the amount is in — ether and bitcoin render the same row. */
+  unit: CoinUnit;
   onPress?: () => void;
 }
 
 /** One transaction: direction, counterparty, amount and when it happened. */
-export function HistoryRow({ entry, network, onPress }: HistoryRowProps) {
+export function HistoryRow({ entry, unit, onPress }: HistoryRowProps) {
   const outgoing = entry.direction === 'out';
   const label =
     entry.direction === 'self' ? 'To yourself' : outgoing ? 'Sent' : 'Received';
@@ -26,7 +26,7 @@ export function HistoryRow({ entry, network, onPress }: HistoryRowProps) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${label} ${formatCoin(entry.value, network)} ${network.currencySymbol}`}
+      accessibilityLabel={`${label} ${formatAmount(entry.value, unit)} ${unit.symbol}`}
       disabled={onPress === undefined}
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -64,7 +64,7 @@ export function HistoryRow({ entry, network, onPress }: HistoryRowProps) {
             ]}
           >
             {amountPrefix}
-            {formatCoin(entry.value, network)} {network.currencySymbol}
+            {formatAmount(entry.value, unit)} {unit.symbol}
           </Text>
           <Text style={styles.when}>{formatWhen(entry.timestamp)}</Text>
         </View>

@@ -10,6 +10,8 @@ import type { NetworkConfig } from './networks';
 export type AssetSupport =
   /** Real balance, real sending. */
   | 'full'
+  /** Real address and a real balance read from the chain; sending not implemented. */
+  | 'watch-only'
   /** Real address derived from the seed; balance and sending not implemented. */
   | 'receive-only';
 
@@ -32,7 +34,7 @@ export function assetsForNetwork(network: NetworkConfig): WalletAsset[] {
     {
       symbol: 'BTC',
       name: 'Bitcoin',
-      support: 'receive-only',
+      support: 'watch-only',
       note: 'Receive only',
     },
   ];

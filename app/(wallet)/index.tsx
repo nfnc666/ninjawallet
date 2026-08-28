@@ -6,10 +6,12 @@ import { router } from 'expo-router';
 
 import { CoinIcon, CoinRow, ScreenBackground } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
-import { formatCoin, shortenAddress } from '@/wallet/chain';
+import { BITCOIN_UNIT } from '@/wallet/bitcoin';
+import { formatAmount, formatCoin, shortenAddress } from '@/wallet/chain';
 import { fiatValue, formatFiat, networkHasFiatValue } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
 import { useBalance } from '@/wallet/useBalance';
+import { useBitcoin } from '@/wallet/useBitcoin';
 import { useWallet } from '@/wallet/WalletContext';
 import { colors, radius, spacing, typography } from '@/theme';
 
@@ -24,11 +26,15 @@ import { colors, radius, spacing, typography } from '@/theme';
 export default function Portfolio() {
   const { network, addresses, currency } = useWallet();
   const balance = useBalance(network, addresses?.evm ?? null);
+  const bitcoin = useBitcoin(addresses?.bitcoin ?? null);
   const assets = assetsForNetwork(network);
 
   const showFiat = networkHasFiatValue(network);
+  // Every symbol, on every network: a testnet coin has no market and is
+  // dropped by the price feed anyway, while the bitcoin address is derived on
+  // mainnet regardless, so its value is real even here.
   const { prices, error: priceError } = usePrices(
-    showFiat ? assets.map((asset) => asset.symbol) : [],
+    assets.map((asset) => asset.symbol),
     currency,
   );
 
@@ -45,8 +51,11 @@ export default function Portfolio() {
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
-            refreshing={balance.loading}
-            onRefresh={balance.refresh}
+            refreshing={balance.loading || bitcoin.loading}
+            onRefresh={() => {
+              balance.refresh();
+              bitcoin.refresh();
+            }}
             tintColor={colors.text}
           />
         }
@@ -144,19 +153,35 @@ export default function Portfolio() {
         <View style={styles.assets}>
           {assets.map((asset) => {
             const isNative = asset.symbol === network.currencySymbol;
-            const rowFiat = isNative ? nativeFiat : null;
+            const isBitcoin = asset.symbol === 'BTC';
+            const held = isNative
+              ? balance.value
+              : isBitcoin
+                ? (bitcoin.balance?.confirmed ?? null)
+                : null;
+            const unit = isBitcoin ? BITCOIN_UNIT : null;
+            const assetPrice = prices[asset.symbol];
+            const rowFiat =
+              held !== null && assetPrice !== undefined
+                ? fiatValue(held, unit?.decimals ?? network.currencyDecimals, assetPrice)
+                : null;
+
             return (
               <CoinRow
                 key={asset.symbol}
                 symbol={asset.symbol}
                 name={asset.name}
                 balance={
-                  isNative && balance.value !== null
-                    ? `${formatCoin(balance.value, network)} ${asset.symbol}`
-                    : undefined
+                  held === null
+                    ? undefined
+                    : unit !== null
+                      ? `${formatAmount(held, unit)} ${asset.symbol}`
+                      : `${formatCoin(held, network)} ${asset.symbol}`
                 }
                 value={rowFiat !== null ? formatFiat(rowFiat, currency) : undefined}
-                note={asset.note}
+                // The note explains what the row cannot do; once a balance is
+                // real, only the missing half is worth saying.
+                note={held === null ? asset.note : isBitcoin ? 'Receive only' : undefined}
                 onPress={() => router.push(`/coin/${asset.symbol}`)}
               />
             );

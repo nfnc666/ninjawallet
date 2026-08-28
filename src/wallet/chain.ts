@@ -122,13 +122,43 @@ export async function sendNativeCoin(params: {
   });
 }
 
+/**
+ * A coin as far as display is concerned: what to call it, how its smallest
+ * unit scales, and how much of the fraction is worth showing.
+ *
+ * Bitcoin is read through the same rows as ether, and the two differ only in
+ * these three numbers, so the components take a unit rather than a network.
+ */
+export interface CoinUnit {
+  symbol: string;
+  /** Smallest-unit exponent: 18 for ether, 8 for bitcoin. */
+  decimals: number;
+  /** Fraction digits to show; the rest are truncated, never rounded up. */
+  precision: number;
+}
+
+/** The unit of a network's native coin. */
+export function unitOf(network: NetworkConfig): CoinUnit {
+  return { symbol: network.currencySymbol, decimals: network.currencyDecimals, precision: 6 };
+}
+
+/**
+ * Formats a smallest-unit amount for display.
+ *
+ * Truncates rather than rounding: rounding 0.9999999 up to 1 would show a
+ * balance the wallet does not have.
+ */
+export function formatAmount(value: bigint, unit: CoinUnit, precision = unit.precision): string {
+  const full = formatUnits(value, unit.decimals);
+  const [whole, fraction = ''] = full.split('.');
+  if (fraction === '' || precision === 0) return whole ?? '0';
+  const trimmed = fraction.slice(0, precision).replace(/0+$/, '');
+  return trimmed === '' ? (whole ?? '0') : `${whole}.${trimmed}`;
+}
+
 /** Formats wei for display, trimmed to `decimals` fraction digits. */
 export function formatCoin(value: bigint, config: NetworkConfig, decimals = 6): string {
-  const full = formatUnits(value, config.currencyDecimals);
-  const [whole, fraction = ''] = full.split('.');
-  if (fraction === '' || decimals === 0) return whole ?? '0';
-  const trimmed = fraction.slice(0, decimals).replace(/0+$/, '');
-  return trimmed === '' ? (whole ?? '0') : `${whole}.${trimmed}`;
+  return formatAmount(value, unitOf(config), decimals);
 }
 
 /**

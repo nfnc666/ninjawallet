@@ -22,10 +22,12 @@ import {
   ScreenHeader,
 } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
-import { formatCoin } from '@/wallet/chain';
+import { formatAmount, unitOf } from '@/wallet/chain';
+import { BITCOIN_UNIT, bitcoinExplorer } from '@/wallet/bitcoin';
 import { fiatValue, formatFiat, networkHasFiatValue } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
 import { usePriceSeries } from '@/wallet/usePriceSeries';
+import { useBitcoin } from '@/wallet/useBitcoin';
 import { CHART_RANGES, DEFAULT_RANGE, type ChartRangeId } from '@/wallet/chartData';
 import { useBalance } from '@/wallet/useBalance';
 import { useHistory } from '@/wallet/useHistory';
@@ -33,33 +35,57 @@ import { useWallet } from '@/wallet/WalletContext';
 import { colors, radius, spacing, typography } from '@/theme';
 
 /**
- * figma 140:1495 ("coin view") — hero mark, balance, send/receive, activity.
+ * figma 140:1495 ("coin view") — hero mark, balance, chart, send/receive,
+ * activity.
  *
- * The spot price is real. The design's price *chart* is still not drawn — that
- * needs historical series, and sketching a plausible-looking curve from a
- * single spot price would be inventing market data.
+ * Ether and bitcoin run through the same screen. They differ in where the
+ * balance is read and in what the wallet can do with it: bitcoin is read from a
+ * public explorer and cannot be spent from here, which the screen says outright
+ * rather than leaving a dead Send button to explain itself.
  */
 export default function CoinDetail() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
   const { network, addresses, currency } = useWallet();
-  const balance = useBalance(network, addresses?.evm ?? null);
 
   const asset = assetsForNetwork(network).find((candidate) => candidate.symbol === symbol);
   const isNative = symbol === network.currencySymbol;
-  const address = symbol === 'BTC' ? addresses?.bitcoin : addresses?.evm;
+  const isBitcoin = symbol === 'BTC';
+  const address = isBitcoin ? addresses?.bitcoin : addresses?.evm;
 
+  const balance = useBalance(network, isNative ? (addresses?.evm ?? null) : null);
   const history = useHistory(network, isNative ? (addresses?.evm ?? null) : null);
+  const bitcoin = useBitcoin(isBitcoin ? (addresses?.bitcoin ?? null) : null, true);
 
   const [range, setRange] = useState<ChartRangeId>(DEFAULT_RANGE);
 
-  const showFiat = networkHasFiatValue(network);
+  // The bitcoin address is derived on mainnet whatever EVM network is selected,
+  // so its balance is real money and carries a real fiat value even while the
+  // Ethereum side is on a testnet.
+  const showFiat = isBitcoin || networkHasFiatValue(network);
+  const unit = isBitcoin ? BITCOIN_UNIT : unitOf(network);
+
   const { prices } = usePrices(showFiat ? [symbol] : [], currency);
   const chart = usePriceSeries(showFiat ? symbol : null, range, currency);
   const price = prices[symbol];
+
+  const held = isBitcoin ? (bitcoin.balance?.confirmed ?? null) : balance.value;
   const holdingFiat =
-    isNative && balance.value !== null && price !== undefined
-      ? fiatValue(balance.value, network.currencyDecimals, price)
-      : null;
+    held !== null && price !== undefined ? fiatValue(held, unit.decimals, price) : null;
+
+  const loading = isBitcoin ? bitcoin.loading : balance.loading || history.loading;
+  const balanceError = isBitcoin ? bitcoin.error : balance.error;
+  const entries = isBitcoin ? bitcoin.entries : history.entries;
+  const historyError = isBitcoin ? bitcoin.error : history.error;
+  const refresh = () => {
+    if (isBitcoin) {
+      bitcoin.refresh();
+      return;
+    }
+    balance.refresh();
+    history.refresh();
+  };
+  const readsChain = isNative || isBitcoin;
+  const pending = bitcoin.balance?.pending ?? 0n;
 
   return (
     <ScreenBackground glow>
@@ -69,34 +95,36 @@ export default function CoinDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.body}
         refreshControl={
-          isNative ? (
-            <RefreshControl
-              refreshing={balance.loading || history.loading}
-              onRefresh={() => {
-                balance.refresh();
-                history.refresh();
-              }}
-              tintColor={colors.text}
-            />
+          readsChain ? (
+            <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.text} />
           ) : undefined
         }
       >
         <View style={styles.hero}>
           <CoinIcon symbol={symbol} size={88} />
           <Text style={styles.balance}>
-            {isNative && balance.value !== null
-              ? `${formatCoin(balance.value, network)} ${symbol}`
-              : `— ${symbol}`}
+            {held !== null ? `${formatAmount(held, unit)} ${symbol}` : `— ${symbol}`}
           </Text>
           {holdingFiat !== null ? (
             <Text style={styles.fiat}>{formatFiat(holdingFiat, currency)}</Text>
           ) : null}
 
-          <Text style={styles.network}>{isNative ? network.name : 'Bitcoin mainnet'}</Text>
+          {/* Unconfirmed coins are called out, never folded into the balance:
+              a transaction in the mempool can still be replaced or dropped. */}
+          {isBitcoin && pending !== 0n ? (
+            <Text style={styles.pending}>
+              {pending > 0n ? '+' : '−'}
+              {formatAmount(pending < 0n ? -pending : pending, unit)} {symbol} unconfirmed
+            </Text>
+          ) : null}
+
+          <Text style={styles.network}>{isBitcoin ? 'Bitcoin mainnet' : network.name}</Text>
 
           {price !== undefined ? (
             <Text style={styles.spot}>1 {symbol} = {formatFiat(price, currency)}</Text>
           ) : null}
+
+          {balanceError !== null ? <Text style={styles.error}>{balanceError}</Text> : null}
         </View>
 
         {showFiat ? (
@@ -153,31 +181,35 @@ export default function CoinDetail() {
           <Card style={styles.notice}>
             <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
             <Text style={styles.noticeText}>
-              {symbol} is receive-only here. The address is derived from your phrase, but this build
-              does not read the {symbol} chain or build {symbol} transactions.
+              {isBitcoin
+                ? 'This balance and history are read live from the bitcoin chain, for the one ' +
+                  'address shown under Receive. Sending needs coin selection and witness ' +
+                  'signing, which this build does not do, so Send is off.'
+                : `${symbol} is receive-only here. The address is derived from your phrase, but ` +
+                  `this build does not read the ${symbol} chain or build ${symbol} transactions.`}
             </Text>
           </Card>
         ) : null}
 
         <Text style={styles.sectionTitle}>Activity</Text>
 
-        {!isNative ? (
+        {!readsChain ? (
           <Card style={styles.activity}>
             <Text style={styles.activityText}>
               This build does not read the {symbol} chain, so there is no activity to show. Your
               history is public — open a {symbol} explorer to read it.
             </Text>
           </Card>
-        ) : history.error !== null ? (
+        ) : historyError !== null ? (
           <Card style={styles.activity}>
-            <Text style={styles.activityText}>{history.error}</Text>
-            <Button label="Try again" variant="ghost" onPress={history.refresh} />
+            <Text style={styles.activityText}>{historyError}</Text>
+            <Button label="Try again" variant="ghost" onPress={refresh} />
           </Card>
-        ) : history.loading && history.entries.length === 0 ? (
+        ) : loading && entries.length === 0 ? (
           <Card style={styles.activity}>
             <ActivityIndicator color={colors.text} />
           </Card>
-        ) : history.entries.length === 0 ? (
+        ) : entries.length === 0 ? (
           <Card style={styles.activity}>
             <Text style={styles.activityText}>
               No transactions yet. Anything you send or receive will show up here.
@@ -185,22 +217,30 @@ export default function CoinDetail() {
           </Card>
         ) : (
           <View style={styles.historyList}>
-            {history.entries.map((entry) => (
+            {entries.map((entry) => (
               <HistoryRow
                 key={entry.hash}
                 entry={entry}
-                network={network}
-                onPress={() => Linking.openURL(network.explorerTxUrl(entry.hash))}
+                unit={unit}
+                onPress={() =>
+                  Linking.openURL(
+                    isBitcoin ? bitcoinExplorer.tx(entry.hash) : network.explorerTxUrl(entry.hash),
+                  )
+                }
               />
             ))}
           </View>
         )}
 
-        {address !== undefined && address !== null && isNative ? (
+        {address !== undefined && address !== null && readsChain ? (
           <Button
             label="Open in explorer"
             variant="ghost"
-            onPress={() => Linking.openURL(network.explorerAddressUrl(address))}
+            onPress={() =>
+              Linking.openURL(
+                isBitcoin ? bitcoinExplorer.address(address) : network.explorerAddressUrl(address),
+              )
+            }
           />
         ) : null}
       </ScrollView>
@@ -233,6 +273,15 @@ const styles = StyleSheet.create({
   spot: {
     ...typography.bodySmall,
     color: colors.textMuted,
+  },
+  pending: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+  },
+  error: {
+    ...typography.bodySmall,
+    color: colors.negative,
+    textAlign: 'center',
   },
   chartBlock: { gap: spacing.md },
   chartLoading: { height: 180, alignItems: 'center', justifyContent: 'center' },

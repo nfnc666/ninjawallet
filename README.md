@@ -25,6 +25,7 @@ Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 | `EXPO_PUBLIC_SEPOLIA_RPC_URL` / `EXPO_PUBLIC_ETHEREUM_RPC_URL` | Use your own node |
 | `EXPO_PUBLIC_PRICE_API_URL` / `EXPO_PUBLIC_PRICE_API_KEY` | Use your own price feed |
 | `EXPO_PUBLIC_HISTORY_API_URL` | Use your own Blockscout instance |
+| `EXPO_PUBLIC_BITCOIN_API_URL` | Use your own Esplora (mempool.space / Blockstream) instance |
 | `EXPO_PUBLIC_0X_API_KEY` | **Required for swapping** — nothing else needs a key |
 | `EXPO_PUBLIC_ONRAMP_URL` | Use a different fiat ramp provider |
 | `EXPO_PUBLIC_MARKETS_API_URL` | Use your own market-data endpoint |
@@ -32,7 +33,7 @@ Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 Checks:
 
 ```bash
-npm test           # 240 tests, incl. BIP-39/44/84 vectors
+npm test           # 267 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -50,7 +51,8 @@ npm run lint
 | Ethereum balance | Real — live JSON-RPC read |
 | Ethereum send | Real — gas estimate, EIP-1559, signed and broadcast |
 | Bitcoin address (BIP-84, `bc1…`) | Real — derived from the same seed |
-| Bitcoin balance / send | **Not implemented** — receive-only |
+| Bitcoin balance and history | Real — Esplora, keyless, one address |
+| Bitcoin send | **Not implemented** — needs coin selection and witness signing |
 | Swap | Real — 0x aggregator, needs an API key, mainnet only |
 | Spot prices and USD value | Real — live feed, mainnet only |
 | Price charts | Real — 24H…1Y series, touch to scrub, mainnet only |
@@ -129,8 +131,13 @@ Decisions worth knowing about before trusting this with anything:
   contract.
 - **Third-party APIs see your addresses.** The default price and history
   endpoints are public services; every lookup tells them which addresses you
-  hold. `EXPO_PUBLIC_PRICE_API_URL` and `EXPO_PUBLIC_HISTORY_API_URL` point both
-  at your own instance.
+  hold. `EXPO_PUBLIC_PRICE_API_URL`, `EXPO_PUBLIC_HISTORY_API_URL` and
+  `EXPO_PUBLIC_BITCOIN_API_URL` point them at your own instance.
+- **The bitcoin balance covers one address.** The wallet reads the BIP-84
+  address at index 0 — the one it shows under Receive — not the whole account
+  xpub. Coins sent to another index derived from the same phrase are still
+  yours and still recoverable from the phrase, but they are not counted in the
+  figure this app shows.
 
 ## Layout
 
@@ -145,7 +152,7 @@ app/                      expo-router routes
 src/
   theme/                  design tokens read out of the Figma file
   components/             Button, Card, CoinRow, CoinIcon, TextField, …
-  wallet/                 mnemonic, derivation, keystore, chain, context
+  wallet/                 mnemonic, derivation, keystore, chain, bitcoin, context
 ```
 
 ## Design fidelity
