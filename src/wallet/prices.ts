@@ -28,6 +28,11 @@ const COIN_IDS: Record<string, string> = {
   WETH: 'weth',
 };
 
+/** Market identifier for an asset, or null when it does not trade. */
+export function marketIdFor(symbol: string): string | null {
+  return COIN_IDS[symbol] ?? null;
+}
+
 /** True when the asset trades and a fiat figure would mean something. */
 export function isPriceable(symbol: string): boolean {
   return symbol in COIN_IDS;

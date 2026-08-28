@@ -4,6 +4,7 @@ export { CoinIcon } from './CoinIcon';
 export { CoinRow } from './CoinRow';
 export { HistoryRow } from './HistoryRow';
 export { NinjaLogo } from './NinjaLogo';
+export { PriceChart } from './PriceChart';
 export { NinjaWordmark } from './NinjaWordmark';
 export { ScreenBackground } from './ScreenBackground';
 export { ScreenHeader } from './ScreenHeader';

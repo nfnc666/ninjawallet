@@ -32,7 +32,7 @@ Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 Checks:
 
 ```bash
-npm test           # 216 tests, incl. BIP-39/44/84 vectors
+npm test           # 240 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -53,7 +53,7 @@ npm run lint
 | Bitcoin balance / send | **Not implemented** — receive-only |
 | Swap | Real — 0x aggregator, needs an API key, mainnet only |
 | Spot prices and USD value | Real — live feed, mainnet only |
-| Price charts | **Not implemented** — needs historical series |
+| Price charts | Real — 24H…1Y series, touch to scrub, mainnet only |
 | Transaction history | Real — Blockscout, keyless |
 | NFT gallery | Real — Blockscout, keyless |
 | Buy / sell with fiat | Real handoff — opens a licensed ramp, address prefilled |

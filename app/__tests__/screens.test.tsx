@@ -34,6 +34,12 @@ const mockWallet = {
   network: jest.requireActual('@/wallet/networks').NETWORKS.sepolia,
 };
 const mockBalance = { value: parseEther('1.5'), loading: false, error: null, refresh: jest.fn() };
+const mockChart = {
+  series: null as unknown,
+  loading: false,
+  error: null as string | null,
+  refresh: jest.fn(),
+};
 const mockHistory = {
   entries: [] as unknown[],
   loading: false,
@@ -58,6 +64,8 @@ jest.mock('@/wallet/WalletContext', () => ({
 jest.mock('@/wallet/useBalance', () => ({ useBalance: () => mockBalance }));
 
 jest.mock('@/wallet/useHistory', () => ({ useHistory: () => mockHistory }));
+
+jest.mock('@/wallet/usePriceSeries', () => ({ usePriceSeries: () => mockChart }));
 
 jest.mock('react-native-qrcode-svg', () => 'QRCode');
 
