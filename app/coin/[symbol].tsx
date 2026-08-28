@@ -23,11 +23,12 @@ import {
 } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
 import { formatAmount, unitOf } from '@/wallet/chain';
-import { BITCOIN_UNIT, bitcoinExplorer } from '@/wallet/bitcoin';
+import { bitcoinExplorer } from '@/wallet/bitcoin';
 import { fiatValue, formatFiat, networkHasFiatValue } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
 import { usePriceSeries } from '@/wallet/usePriceSeries';
 import { useBitcoin } from '@/wallet/useBitcoin';
+import { useTokenBalances } from '@/wallet/useTokenBalances';
 import { CHART_RANGES, DEFAULT_RANGE, type ChartRangeId } from '@/wallet/chartData';
 import { useBalance } from '@/wallet/useBalance';
 import { useHistory } from '@/wallet/useHistory';
@@ -50,10 +51,13 @@ export default function CoinDetail() {
   const asset = assetsForNetwork(network).find((candidate) => candidate.symbol === symbol);
   const isNative = symbol === network.currencySymbol;
   const isBitcoin = symbol === 'BTC';
+  const token = asset?.token;
   const address = isBitcoin ? addresses?.bitcoin : addresses?.evm;
 
-  const balance = useBalance(network, isNative ? (addresses?.evm ?? null) : null);
-  const history = useHistory(network, isNative ? (addresses?.evm ?? null) : null);
+  const evm = addresses?.evm ?? null;
+  const balance = useBalance(network, isNative ? evm : null);
+  const tokens = useTokenBalances(network, token !== undefined ? evm : null);
+  const history = useHistory(network, isNative || token !== undefined ? evm : null, token);
   const bitcoin = useBitcoin(isBitcoin ? (addresses?.bitcoin ?? null) : null, true);
 
   const [range, setRange] = useState<ChartRangeId>(DEFAULT_RANGE);
@@ -62,18 +66,26 @@ export default function CoinDetail() {
   // so its balance is real money and carries a real fiat value even while the
   // Ethereum side is on a testnet.
   const showFiat = isBitcoin || networkHasFiatValue(network);
-  const unit = isBitcoin ? BITCOIN_UNIT : unitOf(network);
+  const unit = asset?.unit ?? unitOf(network);
 
   const { prices } = usePrices(showFiat ? [symbol] : [], currency);
   const chart = usePriceSeries(showFiat ? symbol : null, range, currency);
   const price = prices[symbol];
 
-  const held = isBitcoin ? (bitcoin.balance?.confirmed ?? null) : balance.value;
+  const held = isBitcoin
+    ? (bitcoin.balance?.confirmed ?? null)
+    : token !== undefined
+      ? (tokens.balances[symbol] ?? null)
+      : balance.value;
   const holdingFiat =
     held !== null && price !== undefined ? fiatValue(held, unit.decimals, price) : null;
 
-  const loading = isBitcoin ? bitcoin.loading : balance.loading || history.loading;
-  const balanceError = isBitcoin ? bitcoin.error : balance.error;
+  // Bitcoin is read from its own explorer; everything else on the EVM side
+  // shares the balance and history hooks.
+  const loading = isBitcoin
+    ? bitcoin.loading
+    : balance.loading || tokens.loading || history.loading;
+  const balanceError = isBitcoin ? bitcoin.error : (tokens.error ?? balance.error);
   const entries = isBitcoin ? bitcoin.entries : history.entries;
   const historyError = isBitcoin ? bitcoin.error : history.error;
   const refresh = () => {
@@ -82,9 +94,11 @@ export default function CoinDetail() {
       return;
     }
     balance.refresh();
+    tokens.refresh();
     history.refresh();
   };
-  const readsChain = isNative || isBitcoin;
+  const canSend = isNative || token !== undefined;
+  const readsChain = canSend || isBitcoin;
   const pending = bitcoin.balance?.pending ?? 0n;
 
   return (
@@ -166,7 +180,7 @@ export default function CoinDetail() {
           <Button
             label="Send"
             style={styles.action}
-            disabled={!isNative}
+            disabled={!canSend}
             onPress={() => router.push(`/send/${symbol}`)}
           />
           <Button
@@ -177,7 +191,7 @@ export default function CoinDetail() {
           />
         </View>
 
-        {!isNative ? (
+        {!canSend ? (
           <Card style={styles.notice}>
             <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
             <Text style={styles.noticeText}>
@@ -187,6 +201,15 @@ export default function CoinDetail() {
                   'signing, which this build does not do, so Send is off.'
                 : `${symbol} is receive-only here. The address is derived from your phrase, but ` +
                   `this build does not read the ${symbol} chain or build ${symbol} transactions.`}
+            </Text>
+          </Card>
+        ) : token !== undefined ? (
+          <Card style={styles.notice}>
+            <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
+            <Text style={styles.noticeText}>
+              {symbol} is an ERC-20 on {network.name}. Sending it still costs gas in{' '}
+              {network.currencySymbol}, which is deducted from your {network.currencySymbol}{' '}
+              balance, not from your {symbol}.
             </Text>
           </Card>
         ) : null}

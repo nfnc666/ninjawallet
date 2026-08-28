@@ -105,6 +105,48 @@ export function fiatValue(amount: bigint, decimals: number, usdPrice: number): n
   return (Number(scaled) / Number(precision)) * usdPrice;
 }
 
+export interface Holding {
+  symbol: string;
+  /** Amount held, in the asset's smallest unit. */
+  amount: bigint;
+  decimals: number;
+}
+
+export interface PortfolioTotal {
+  /** Sum of every holding that could be priced. */
+  total: number;
+  /** Symbols held in a non-zero amount that no price was available for. */
+  unpriced: string[];
+}
+
+/**
+ * Adds up what the wallet holds.
+ *
+ * A holding with no price is left out of the sum and named in `unpriced`
+ * instead. Treating a missing price as zero would quietly understate the
+ * total, and a total that is wrong in a knowable way is worse than one that
+ * says which part of itself is missing. A zero balance is never named: nothing
+ * is missing from the sum when there is nothing to add.
+ */
+export function portfolioTotal(
+  holdings: Holding[],
+  prices: Record<string, number>,
+): PortfolioTotal {
+  let total = 0;
+  const unpriced: string[] = [];
+
+  for (const holding of holdings) {
+    const price = prices[holding.symbol];
+    if (price === undefined) {
+      if (holding.amount > 0n) unpriced.push(holding.symbol);
+      continue;
+    }
+    total += fiatValue(holding.amount, holding.decimals, price);
+  }
+
+  return { total, unpriced };
+}
+
 /**
  * Formats a fiat amount the way a balance line should read.
  *

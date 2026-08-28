@@ -6,12 +6,12 @@ import { router } from 'expo-router';
 
 import { CoinIcon, CoinRow, ScreenBackground } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
-import { BITCOIN_UNIT } from '@/wallet/bitcoin';
 import { formatAmount, formatCoin, shortenAddress } from '@/wallet/chain';
-import { fiatValue, formatFiat, networkHasFiatValue } from '@/wallet/prices';
+import { fiatValue, formatFiat, networkHasFiatValue, portfolioTotal } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
 import { useBalance } from '@/wallet/useBalance';
 import { useBitcoin } from '@/wallet/useBitcoin';
+import { useTokenBalances } from '@/wallet/useTokenBalances';
 import { useWallet } from '@/wallet/WalletContext';
 import { colors, radius, spacing, typography } from '@/theme';
 
@@ -27,6 +27,7 @@ export default function Portfolio() {
   const { network, addresses, currency } = useWallet();
   const balance = useBalance(network, addresses?.evm ?? null);
   const bitcoin = useBitcoin(addresses?.bitcoin ?? null);
+  const tokens = useTokenBalances(network, addresses?.evm ?? null);
   const assets = assetsForNetwork(network);
 
   const showFiat = networkHasFiatValue(network);
@@ -38,11 +39,34 @@ export default function Portfolio() {
     currency,
   );
 
-  const nativePrice = prices[network.currencySymbol];
-  const nativeFiat =
-    balance.value !== null && nativePrice !== undefined
-      ? fiatValue(balance.value, network.currencyDecimals, nativePrice)
-      : null;
+  /** What this asset's row can actually show, or null when nothing was read. */
+  const amountOf = (asset: (typeof assets)[number]): bigint | null => {
+    if (asset.symbol === network.currencySymbol) return balance.value;
+    if (asset.symbol === 'BTC') return bitcoin.balance?.confirmed ?? null;
+    return tokens.balances[asset.symbol] ?? null;
+  };
+
+  const holdings = assets
+    .map((asset) => ({
+      symbol: asset.symbol,
+      amount: amountOf(asset),
+      decimals: asset.unit.decimals,
+    }))
+    .filter((holding): holding is { symbol: string; amount: bigint; decimals: number } =>
+      holding.amount !== null,
+    );
+
+  // The card sums every holding that could be priced and names the rest, so a
+  // total is never quietly short of an asset the wallet actually holds.
+  const { total, unpriced } = portfolioTotal(holdings, prices);
+  const nativeAmount = balance.value;
+  const nativeFiat = showFiat && holdings.length > 0 ? total : null;
+  const loading = balance.loading || bitcoin.loading || tokens.loading;
+  const refreshAll = () => {
+    balance.refresh();
+    bitcoin.refresh();
+    tokens.refresh();
+  };
 
   return (
     <ScreenBackground glow>
@@ -50,14 +74,7 @@ export default function Portfolio() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl
-            refreshing={balance.loading || bitcoin.loading}
-            onRefresh={() => {
-              balance.refresh();
-              bitcoin.refresh();
-            }}
-            tintColor={colors.text}
-          />
+          <RefreshControl refreshing={loading} onRefresh={refreshAll} tintColor={colors.text} />
         }
       >
         <View style={styles.topBar}>
@@ -86,24 +103,32 @@ export default function Portfolio() {
           </Text>
 
           <Text style={styles.balanceValue} accessibilityRole="text">
-            {balance.value === null
-              ? balance.error !== null
-                ? '—'
-                : 'Loading…'
-              : nativeFiat !== null
-                ? formatFiat(nativeFiat, currency)
-                : `${formatCoin(balance.value, network)} ${network.currencySymbol}`}
+            {nativeFiat !== null
+              ? formatFiat(nativeFiat, currency)
+              : nativeAmount !== null
+                ? `${formatCoin(nativeAmount, network)} ${network.currencySymbol}`
+                : balance.error !== null
+                  ? '—'
+                  : 'Loading…'}
           </Text>
 
-          {nativeFiat !== null && balance.value !== null ? (
+          {nativeFiat !== null && nativeAmount !== null ? (
             <Text style={styles.balanceSub}>
-              {formatCoin(balance.value, network)} {network.currencySymbol}
+              {formatCoin(nativeAmount, network)} {network.currencySymbol}
             </Text>
           ) : null}
 
-          {showFiat && nativeFiat === null && balance.value !== null ? (
+          {showFiat && nativeFiat === null && nativeAmount !== null ? (
             <Text style={styles.balanceSub}>
               {priceError ?? 'Price unavailable'} — showing coin amount only
+            </Text>
+          ) : null}
+
+          {/* A total that silently drops an asset is worse than one that says
+              which asset it dropped. */}
+          {nativeFiat !== null && unpriced.length > 0 ? (
+            <Text style={styles.balanceSub}>
+              Not counted: {unpriced.join(', ')} — no price available
             </Text>
           ) : null}
 
@@ -152,18 +177,11 @@ export default function Portfolio() {
 
         <View style={styles.assets}>
           {assets.map((asset) => {
-            const isNative = asset.symbol === network.currencySymbol;
-            const isBitcoin = asset.symbol === 'BTC';
-            const held = isNative
-              ? balance.value
-              : isBitcoin
-                ? (bitcoin.balance?.confirmed ?? null)
-                : null;
-            const unit = isBitcoin ? BITCOIN_UNIT : null;
+            const held = amountOf(asset);
             const assetPrice = prices[asset.symbol];
             const rowFiat =
               held !== null && assetPrice !== undefined
-                ? fiatValue(held, unit?.decimals ?? network.currencyDecimals, assetPrice)
+                ? fiatValue(held, asset.unit.decimals, assetPrice)
                 : null;
 
             return (
@@ -172,16 +190,12 @@ export default function Portfolio() {
                 symbol={asset.symbol}
                 name={asset.name}
                 balance={
-                  held === null
-                    ? undefined
-                    : unit !== null
-                      ? `${formatAmount(held, unit)} ${asset.symbol}`
-                      : `${formatCoin(held, network)} ${asset.symbol}`
+                  held === null ? undefined : `${formatAmount(held, asset.unit)} ${asset.symbol}`
                 }
                 value={rowFiat !== null ? formatFiat(rowFiat, currency) : undefined}
                 // The note explains what the row cannot do; once a balance is
-                // real, only the missing half is worth saying.
-                note={held === null ? asset.note : isBitcoin ? 'Receive only' : undefined}
+                // real, only the missing half is still worth saying.
+                note={asset.support === 'full' && held !== null ? undefined : asset.note}
                 onPress={() => router.push(`/coin/${asset.symbol}`)}
               />
             );

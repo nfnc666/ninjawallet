@@ -1,6 +1,7 @@
 import { Contract, formatUnits, parseUnits, type TransactionResponse } from 'ethers';
 
 import { getProvider } from './chain';
+import { ERC20_ABI } from './erc20';
 import { deriveEvmWallet } from './derivation';
 import { NETWORKS, type NetworkId } from './networks';
 import { isNativeToken, networkSupportsSwap, type Token } from './tokens';
@@ -24,12 +25,6 @@ export const DEFAULT_SLIPPAGE_BPS = 100;
  * and it is exactly the setting a sandwich attack feeds on.
  */
 export const MAX_SLIPPAGE_BPS = 500;
-
-const ERC20_ABI = [
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function balanceOf(address owner) view returns (uint256)',
-];
 
 export class SwapUnavailableError extends Error {
   constructor(message: string) {

@@ -14,8 +14,19 @@ import { isAddress } from 'ethers';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { Button, Card, CoinIcon, ScreenBackground, ScreenHeader, TextField } from '@/components';
-import { formatCoin, parseCoin, quoteTransfer, sendNativeCoin, type FeeQuote } from '@/wallet/chain';
+import {
+  formatAmount,
+  formatCoin,
+  parseAmount,
+  quoteTransfer,
+  sendNativeCoin,
+  unitOf,
+  type FeeQuote,
+} from '@/wallet/chain';
+import { assetsForNetwork } from '@/wallet/assets';
+import { quoteTokenTransfer, sendToken } from '@/wallet/erc20';
 import { useBalance } from '@/wallet/useBalance';
+import { useTokenBalances } from '@/wallet/useTokenBalances';
 import { takeScannedPayment } from '@/wallet/scanResult';
 import { useWallet } from '@/wallet/WalletContext';
 import { colors, radius, spacing, typography } from '@/theme';
@@ -26,13 +37,24 @@ type Stage = 'compose' | 'review' | 'sent';
  * figma 249:2327 ("send btc"), reworked into a real transfer flow: compose,
  * review the actual on-chain fee, then sign and broadcast.
  *
+ * Ether and ERC-20s run through the same form; they differ only in which
+ * balance funds the amount and which call is signed. The fee is quoted in the
+ * native coin either way, because that is what pays for gas.
+ *
  * Bitcoin is receive-only in this build, so a BTC send is refused up front
  * rather than shown as a dead form.
  */
 export default function SendScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
   const { network, addresses, withPhrase } = useWallet();
+
+  const asset = assetsForNetwork(network).find((candidate) => candidate.symbol === symbol);
+  const token = asset?.token;
+  const unit = asset?.unit ?? unitOf(network);
+
   const balance = useBalance(network, addresses?.evm ?? null);
+  const tokens = useTokenBalances(network, token !== undefined ? (addresses?.evm ?? null) : null);
+  const available = token !== undefined ? (tokens.balances[symbol] ?? null) : balance.value;
 
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
@@ -55,10 +77,13 @@ export default function SendScreen() {
       // A payment code may request an amount; honour it, but never silently —
       // it lands in the field the user still has to confirm.
       if (scanned.amount !== null) setAmount(scanned.amount);
-    }, []),
+      // The setters are stable, so this runs once per focus either way; they
+      // are listed because the compiler infers them and refuses to optimise a
+      // callback whose declared dependencies do not match.
+    }, [setTo, setStage, setError, setAmount]),
   );
 
-  if (symbol !== network.currencySymbol) {
+  if (symbol !== network.currencySymbol && token === undefined) {
     return (
       <ScreenBackground>
         <ScreenHeader title={`Send ${symbol}`} />
@@ -77,15 +102,24 @@ export default function SendScreen() {
     setBusy(true);
     setError(null);
     try {
-      const value = parseCoin(amount, network);
+      const value = parseAmount(amount, unit);
       if (addresses === null) throw new Error('Wallet is locked.');
 
-      const fee = await quoteTransfer({
-        networkId: network.id,
-        from: addresses.evm,
-        to: to.trim(),
-        amount: value,
-      });
+      const fee =
+        token !== undefined
+          ? await quoteTokenTransfer({
+              networkId: network.id,
+              token,
+              from: addresses.evm,
+              to: to.trim(),
+              amount: value,
+            })
+          : await quoteTransfer({
+              networkId: network.id,
+              from: addresses.evm,
+              to: to.trim(),
+              amount: value,
+            });
       setQuote(fee);
       setStage('review');
     } catch (caught) {
@@ -99,13 +133,16 @@ export default function SendScreen() {
     setBusy(true);
     setError(null);
     try {
-      const value = parseCoin(amount, network);
+      const value = parseAmount(amount, unit);
       const tx = await withPhrase((phrase) =>
-        sendNativeCoin({ networkId: network.id, phrase, to: to.trim(), amount: value }),
+        token !== undefined
+          ? sendToken({ networkId: network.id, phrase, token, to: to.trim(), amount: value })
+          : sendNativeCoin({ networkId: network.id, phrase, to: to.trim(), amount: value }),
       );
       setTxHash(tx.hash);
       setStage('sent');
       balance.refresh();
+      tokens.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The transaction was not sent.');
       setStage('compose');
@@ -152,9 +189,9 @@ export default function SendScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
           <View style={styles.hero}>
             <CoinIcon symbol={symbol} size={72} />
-            {balance.value !== null ? (
+            {available !== null ? (
               <Text style={styles.available}>
-                {formatCoin(balance.value, network)} {symbol} available
+                {formatAmount(available, unit)} {symbol} available
               </Text>
             ) : null}
           </View>
@@ -205,9 +242,12 @@ export default function SendScreen() {
               <Text style={styles.reviewTitle}>Review</Text>
               <ReviewRow label="Amount" value={`${amount} ${symbol}`} />
               <ReviewRow label="Network" value={network.name} />
+              {/* Gas is always paid in the native coin, never in the token
+                  being sent — labelling it with the token's ticker would
+                  misstate what the transfer costs. */}
               <ReviewRow
                 label="Max network fee"
-                value={`${formatCoin(quote.maxFee, network)} ${symbol}`}
+                value={`${formatCoin(quote.maxFee, network)} ${network.currencySymbol}`}
               />
               <ReviewRow label="Gas limit" value={quote.gasLimit.toString()} />
               <Text style={styles.reviewNote}>

@@ -33,7 +33,7 @@ Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 Checks:
 
 ```bash
-npm test           # 267 tests, incl. BIP-39/44/84 vectors
+npm test           # 304 tests, incl. BIP-39/44/84 vectors
 npm run typecheck
 npm run lint
 ```
@@ -50,13 +50,15 @@ npm run lint
 | Auto-lock | Real — clears the key after 2 min backgrounded |
 | Ethereum balance | Real — live JSON-RPC read |
 | Ethereum send | Real — gas estimate, EIP-1559, signed and broadcast |
+| ERC-20 balances (USDC, USDT, DAI, WETH) | Real — on-chain `balanceOf`, mainnet only |
+| ERC-20 send | Real — gas quoted in ETH, balance and revert checked first |
 | Bitcoin address (BIP-84, `bc1…`) | Real — derived from the same seed |
 | Bitcoin balance and history | Real — Esplora, keyless, one address |
 | Bitcoin send | **Not implemented** — needs coin selection and witness signing |
 | Swap | Real — 0x aggregator, needs an API key, mainnet only |
-| Spot prices and USD value | Real — live feed, mainnet only |
+| Spot prices and portfolio total | Real — live feed, names what it could not price |
 | Price charts | Real — 24H…1Y series, touch to scrub, mainnet only |
-| Transaction history | Real — Blockscout, keyless |
+| Transaction history (coin and token) | Real — Blockscout, keyless |
 | NFT gallery | Real — Blockscout, keyless |
 | Buy / sell with fiat | Real handoff — opens a licensed ramp, address prefilled |
 | Staking | Informational — explains the routes, does not stake for you |
@@ -152,7 +154,7 @@ app/                      expo-router routes
 src/
   theme/                  design tokens read out of the Figma file
   components/             Button, Card, CoinRow, CoinIcon, TextField, …
-  wallet/                 mnemonic, derivation, keystore, chain, bitcoin, context
+  wallet/                 mnemonic, derivation, keystore, chain, erc20, bitcoin, context
 ```
 
 ## Design fidelity

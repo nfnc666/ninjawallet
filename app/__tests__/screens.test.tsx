@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import TestRenderer, { act, type ReactTestInstance } from 'react-test-renderer';
-import { parseEther } from 'ethers';
+import { parseEther, parseUnits } from 'ethers';
+
+import { NETWORKS } from '@/wallet/networks';
 
 /**
  * Smoke tests for the screens behind the lock. They cannot be reached in a
@@ -31,7 +33,7 @@ const mockWallet = {
   unlock: jest.fn(),
   createWallet: jest.fn(),
   retryLoad: jest.fn(),
-  network: jest.requireActual('@/wallet/networks').NETWORKS.sepolia,
+  network: NETWORKS.sepolia,
 };
 const mockBalance = { value: parseEther('1.5'), loading: false, error: null, refresh: jest.fn() };
 const mockChart = {
@@ -49,6 +51,12 @@ const mockHistory = {
 const mockBitcoin = {
   balance: { confirmed: 25_000_000n, pending: 0n, txCount: 2 } as unknown,
   entries: [] as unknown[],
+  loading: false,
+  error: null as string | null,
+  refresh: jest.fn(),
+};
+const mockTokens = {
+  balances: {} as Record<string, bigint>,
   loading: false,
   error: null as string | null,
   refresh: jest.fn(),
@@ -81,6 +89,11 @@ jest.mock('@/wallet/useHistory', () => ({ useHistory: () => mockHistory }));
 jest.mock('@/wallet/useBitcoin', () => ({ useBitcoin: () => mockBitcoin }));
 
 jest.mock('@/wallet/usePrices', () => ({ usePrices: () => mockPrices }));
+
+jest.mock('@/wallet/useTokenBalances', () => ({
+  ...jest.requireActual('@/wallet/useTokenBalances'),
+  useTokenBalances: () => mockTokens,
+}));
 
 jest.mock('@/wallet/usePriceSeries', () => ({ usePriceSeries: () => mockChart }));
 
@@ -130,6 +143,10 @@ beforeEach(() => {
   mockBitcoin.error = null;
   mockBitcoin.loading = false;
   mockPrices.prices = { BTC: 40_000 };
+  mockTokens.balances = {};
+  mockTokens.error = null;
+  mockTokens.loading = false;
+  mockWallet.network = NETWORKS.sepolia;
 });
 
 describe('portfolio', () => {
@@ -317,5 +334,64 @@ describe('coin detail', () => {
     const text = textOf(render(Coin as React.ComponentType).root);
     expect(text).toMatch(/rate limiting/i);
     expect(text).not.toMatch(/no transactions yet/i);
+  });
+});
+
+describe('tokens on mainnet', () => {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const Portfolio = () => require('../(wallet)/index').default();
+  const Coin = () => require('../coin/[symbol]').default();
+  const Send = () => require('../send/[symbol]').default();
+  /* eslint-enable @typescript-eslint/no-require-imports */
+
+  beforeEach(() => {
+    mockWallet.network = NETWORKS.ethereum;
+    mockTokens.balances = { USDC: parseUnits('250', 6) };
+    mockPrices.prices = { ETH: 2_000, USDC: 1, BTC: 40_000 };
+  });
+
+  it('lists an ERC-20 with its own decimals, not ether\'s', () => {
+    const text = textOf(render(Portfolio as React.ComponentType).root);
+    expect(text).toContain('250 USDC');
+  });
+
+  it('totals ether, tokens and bitcoin together', () => {
+    // 1.5 ETH at 2000 + 250 USDC + 0.25 BTC at 40000 = 13,250.
+    const text = textOf(render(Portfolio as React.ComponentType).root);
+    expect(text).toContain('$13,250');
+  });
+
+  it('names an asset it could not price rather than counting it as zero', () => {
+    mockPrices.prices = { ETH: 2_000 };
+    const text = textOf(render(Portfolio as React.ComponentType).root);
+    expect(text).toMatch(/not counted:.*USDC/i);
+    expect(text).toMatch(/not counted:.*BTC/i);
+  });
+
+  it('shows the token balance on its own screen', () => {
+    mockParams.symbol = 'USDC';
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toContain('250 USDC');
+    expect(text).toContain('$250');
+  });
+
+  it('says gas is paid in ether, not in the token being sent', () => {
+    mockParams.symbol = 'USDC';
+    const text = textOf(render(Coin as React.ComponentType).root);
+    expect(text).toMatch(/still costs gas in/i);
+  });
+
+  it('offers a real transfer form for a token', () => {
+    mockParams.symbol = 'USDC';
+    const text = textOf(render(Send as React.ComponentType).root);
+    expect(text).toContain('Recipient address');
+    expect(text).toContain('250 USDC available');
+  });
+
+  it('shows no token balance when the read failed, rather than zero', () => {
+    mockTokens.balances = {};
+    mockTokens.error = 'Could not read token balances.';
+    const text = textOf(render(Portfolio as React.ComponentType).root);
+    expect(text).not.toContain('0 USDC');
   });
 });

@@ -1,4 +1,4 @@
-import { formatCoin, parseCoin, shortenAddress } from '../chain';
+import { formatAmount, formatCoin, parseAmount, parseCoin, shortenAddress, unitOf } from '../chain';
 import { NETWORKS } from '../networks';
 
 const network = NETWORKS.sepolia;
@@ -80,5 +80,30 @@ describe('NETWORKS', () => {
     const mainnets = Object.values(NETWORKS).filter((entry) => entry.isMainnet);
     expect(mainnets).toHaveLength(1);
     expect(mainnets[0]?.id).toBe('ethereum');
+  });
+});
+
+describe('parseAmount and formatAmount', () => {
+  const usdc = { symbol: 'USDC', decimals: 6, precision: 6 };
+
+  it('parses into the asset\'s own units', () => {
+    expect(parseAmount('2.5', usdc)).toBe(2_500_000n);
+    expect(parseAmount('2.5', unitOf(network))).toBe(2_500_000_000_000_000_000n);
+  });
+
+  it('refuses more precision than the asset has, rather than rounding it', () => {
+    // 0.0000001 USDC is not an amount that can exist; sending a rounded
+    // version would send a different number than the one typed.
+    expect(() => parseAmount('0.0000001', usdc)).toThrow(/decimals/i);
+  });
+
+  it('refuses anything that is not a plain positive decimal', () => {
+    expect(() => parseAmount('-1', usdc)).toThrow(/valid amount/i);
+    expect(() => parseAmount('1e6', usdc)).toThrow(/valid amount/i);
+  });
+
+  it('truncates for display rather than rounding up', () => {
+    // Rounding 0.9999999 up to 1 would show a balance the wallet lacks.
+    expect(formatAmount(999_999n, { ...usdc, precision: 4 })).toBe('0.9999');
   });
 });

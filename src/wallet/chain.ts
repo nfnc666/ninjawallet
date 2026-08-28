@@ -162,13 +162,28 @@ export function formatCoin(value: bigint, config: NetworkConfig, decimals = 6): 
 }
 
 /**
+ * Parses a user-typed amount into the asset's smallest unit.
+ * Throws on anything that is not a plain positive decimal.
+ */
+export function parseAmount(input: string, unit: CoinUnit): bigint {
+  const cleaned = input.trim().replace(',', '.');
+  if (!/^\d*\.?\d+$/.test(cleaned)) throw new Error('Enter a valid amount.');
+  try {
+    return parseUnits(cleaned, unit.decimals);
+  } catch {
+    // parseUnits rejects more fraction digits than the asset has — 0.0000001
+    // USDC is not an amount that can exist, and rounding it for the user would
+    // send a different number than they typed.
+    throw new Error(`${unit.symbol} has ${unit.decimals} decimals; that is more precision.`);
+  }
+}
+
+/**
  * Parses a user-typed amount into wei.
  * Throws on anything that is not a plain positive decimal.
  */
 export function parseCoin(input: string, config: NetworkConfig): bigint {
-  const cleaned = input.trim().replace(',', '.');
-  if (!/^\d*\.?\d+$/.test(cleaned)) throw new Error('Enter a valid amount.');
-  return parseUnits(cleaned, config.currencyDecimals);
+  return parseAmount(input, unitOf(config));
 }
 
 /** Shortens an address for display: 0x1234…abcd. */

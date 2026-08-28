@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { fetchHistory, type HistoryEntry } from './history';
+import { fetchHistory, fetchTokenTransfers, type HistoryEntry } from './history';
 import type { NetworkConfig } from './networks';
+import type { Token } from './tokens';
 
 export interface HistoryState {
   entries: HistoryEntry[];
@@ -11,7 +12,7 @@ export interface HistoryState {
 }
 
 interface Loaded {
-  /** Which network+address this result belongs to. */
+  /** Which network+address+asset this result belongs to. */
   key: string;
   entries: HistoryEntry[];
   error: string | null;
@@ -20,17 +21,24 @@ interface Loaded {
 const EMPTY: HistoryEntry[] = [];
 
 /**
- * Loads recent transactions for `address` on `network`.
+ * Loads recent transactions for `address` on `network`, or transfers of
+ * `token` when one is given.
  *
- * Keyed by network+address like {@link useBalance}, so switching account can
- * never show the previous account's transactions under the new one.
+ * Keyed by network+address+asset like {@link useBalance}, so switching account
+ * or asset can never show one asset's movements under another's ticker — the
+ * amounts would look plausible and be in the wrong denomination.
  */
-export function useHistory(network: NetworkConfig, address: string | null): HistoryState {
+export function useHistory(
+  network: NetworkConfig,
+  address: string | null,
+  token?: Token,
+): HistoryState {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [nonce, setNonce] = useState(0);
 
-  const key = address === null ? null : `${network.id}:${address}`;
+  const contract = token?.address ?? null;
+  const key = address === null ? null : `${network.id}:${address}:${contract ?? 'native'}`;
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -42,7 +50,12 @@ export function useHistory(network: NetworkConfig, address: string | null): Hist
 
     let cancelled = false;
 
-    fetchHistory(network, address)
+    const load =
+      contract === null
+        ? fetchHistory(network, address)
+        : fetchTokenTransfers(network, address, contract);
+
+    load
       .then((entries) => {
         if (!cancelled) setLoaded({ key, entries, error: null });
       })
@@ -64,7 +77,7 @@ export function useHistory(network: NetworkConfig, address: string | null): Hist
     // `network` is a stable config object keyed by id; depending on the id
     // avoids refetching when the object identity changes but the chain has not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [network.id, address, key, nonce]);
+  }, [network.id, address, contract, key, nonce]);
 
   const current = loaded !== null && loaded.key === key ? loaded : null;
 

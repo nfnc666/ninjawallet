@@ -1,5 +1,6 @@
 import {
   fiatValue,
+  portfolioTotal,
   formatFiat,
   fetchPrices,
   isPriceable,
@@ -147,5 +148,32 @@ describe('fetchPrices currency', () => {
     // Reading the wrong field would show a euro figure with a dollar sign.
     mockFetch({ body: { ethereum: { usd: 3200 } } });
     await expect(fetchPrices(['ETH'], 'eur')).resolves.toEqual({});
+  });
+});
+
+describe('portfolioTotal', () => {
+  const eth = { symbol: 'ETH', amount: 10n ** 18n, decimals: 18 };
+  const usdc = { symbol: 'USDC', amount: 2_500_000n, decimals: 6 };
+
+  it('adds holdings across different decimals', () => {
+    const { total } = portfolioTotal([eth, usdc], { ETH: 3000, USDC: 1 });
+    expect(total).toBeCloseTo(3002.5, 6);
+  });
+
+  it('leaves an unpriced holding out of the sum and names it', () => {
+    // Counting a missing price as zero would quietly understate the total.
+    const { total, unpriced } = portfolioTotal([eth, usdc], { ETH: 3000 });
+    expect(total).toBeCloseTo(3000, 6);
+    expect(unpriced).toEqual(['USDC']);
+  });
+
+  it('does not name an asset the wallet holds none of', () => {
+    // Nothing is missing from the sum when there is nothing to add.
+    const { unpriced } = portfolioTotal([{ ...usdc, amount: 0n }], {});
+    expect(unpriced).toEqual([]);
+  });
+
+  it('totals nothing for an empty wallet', () => {
+    expect(portfolioTotal([], { ETH: 3000 })).toEqual({ total: 0, unpriced: [] });
   });
 });

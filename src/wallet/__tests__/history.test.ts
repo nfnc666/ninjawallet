@@ -1,4 +1,9 @@
-import { fetchHistory, formatWhen, HistoryUnavailableError } from '../history';
+import {
+  fetchHistory,
+  fetchTokenTransfers,
+  formatWhen,
+  HistoryUnavailableError,
+} from '../history';
 import { NETWORKS } from '../networks';
 
 const SELF = '0x9858EfFD232B4033E47d90003D41EC34EcaEda94';
@@ -138,5 +143,75 @@ describe('formatWhen', () => {
 
   it('falls back to a date beyond a week', () => {
     expect(formatWhen(new Date(Date.now() - 30 * 86_400_000))).toMatch(/\d+ \w+/);
+  });
+});
+
+describe('fetchTokenTransfers', () => {
+  const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+  const DAI = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
+
+  const transfer = (over: Record<string, unknown> = {}) => ({
+    tx_hash: '0xfeed',
+    timestamp: '2026-01-02T03:04:05.000000Z',
+    from: { hash: OTHER },
+    to: { hash: SELF },
+    total: { value: '2500000' },
+    token: { address: USDC },
+    ...over,
+  });
+
+  it('reads the token amount, not the transaction value', () => {
+    // A token movement is a log inside a transaction; the transaction's own
+    // value is usually zero.
+    mockFetch({ body: { items: [transfer()] } });
+    return expect(fetchTokenTransfers(NETWORKS.ethereum, SELF, USDC)).resolves.toMatchObject([
+      { value: 2_500_000n, direction: 'in' },
+    ]);
+  });
+
+  it('marks a transfer we sent as outgoing, with the recipient', async () => {
+    mockFetch({
+      body: { items: [transfer({ from: { hash: SELF }, to: { hash: OTHER } })] },
+    });
+    const [entry] = await fetchTokenTransfers(NETWORKS.ethereum, SELF, USDC);
+    expect(entry?.direction).toBe('out');
+    expect(entry?.counterparty).toBe(OTHER);
+  });
+
+  it('drops a row for a different token than the one asked for', async () => {
+    // The explorer decides what it returns; a DAI row under the USDC ticker
+    // would misstate the amount by twelve decimal places.
+    mockFetch({ body: { items: [transfer({ token: { address: DAI } }), transfer()] } });
+    expect(await fetchTokenTransfers(NETWORKS.ethereum, SELF, USDC)).toHaveLength(1);
+  });
+
+  it('charges no fee to the transfer itself', async () => {
+    // The fee belongs to the transaction, not to this log.
+    const [entry] = await (async () => {
+      mockFetch({ body: { items: [transfer()] } });
+      return fetchTokenTransfers(NETWORKS.ethereum, SELF, USDC);
+    })();
+    expect(entry?.fee).toBeNull();
+  });
+
+  it('asks the explorer only for ERC-20 transfers of that contract', async () => {
+    mockFetch({ body: { items: [] } });
+    await fetchTokenTransfers(NETWORKS.ethereum, SELF, USDC);
+    const url = String((global.fetch as jest.Mock).mock.calls[0][0]);
+    expect(url).toContain('token-transfers');
+    expect(url).toContain('type=ERC-20');
+    expect(url).toContain(encodeURIComponent(USDC));
+  });
+
+  it('reads an address the explorer never saw as no transfers', async () => {
+    mockFetch({ ok: false, status: 404 });
+    expect(await fetchTokenTransfers(NETWORKS.ethereum, SELF, USDC)).toEqual([]);
+  });
+
+  it('surfaces a failure rather than reading as an empty history', async () => {
+    mockFetch({ ok: false, status: 500 });
+    await expect(fetchTokenTransfers(NETWORKS.ethereum, SELF, USDC)).rejects.toBeInstanceOf(
+      HistoryUnavailableError,
+    );
   });
 });

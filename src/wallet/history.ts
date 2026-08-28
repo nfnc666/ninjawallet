@@ -135,6 +135,94 @@ function toEntry(item: BlockscoutTx, self: string | null): HistoryEntry | null {
   };
 }
 
+interface BlockscoutTokenTransfer {
+  tx_hash?: unknown;
+  timestamp?: unknown;
+  from?: { hash?: unknown } | null;
+  to?: { hash?: unknown } | null;
+  total?: { value?: unknown } | null;
+  token?: { address?: unknown } | null;
+}
+
+/**
+ * Fetches ERC-20 transfers of one token for `address`.
+ *
+ * A separate endpoint from the native history because a token movement is a
+ * log inside a transaction, not the transaction's own value — reading the two
+ * from the same list would report a token transfer as if ether had moved.
+ *
+ * Filtered to `contract` client-side as well as in the query: the explorer
+ * decides what it returns, and a row from another token rendered under this
+ * token's ticker would misstate the amount.
+ */
+export async function fetchTokenTransfers(
+  network: NetworkConfig,
+  address: string,
+  contract: string,
+  limit = 25,
+): Promise<HistoryEntry[]> {
+  const base = HISTORY_API_OVERRIDE ?? network.historyApiUrl;
+  const wanted = toAddress(contract);
+  const url =
+    `${base}/addresses/${address}/token-transfers` +
+    `?type=ERC-20&token=${encodeURIComponent(contract)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { accept: 'application/json' } });
+  } catch (caught) {
+    throw new HistoryUnavailableError(
+      caught instanceof Error ? caught.message : 'Could not reach the explorer.',
+    );
+  }
+
+  if (response.status === 404) return [];
+  if (response.status === 429) {
+    throw new HistoryUnavailableError('Explorer is rate limiting. Try again shortly.');
+  }
+  if (!response.ok) {
+    throw new HistoryUnavailableError(`Explorer returned ${response.status}.`);
+  }
+
+  const body = (await response.json()) as { items?: BlockscoutTokenTransfer[] } | null;
+  const items = Array.isArray(body?.items) ? body.items : [];
+  const self = toAddress(address);
+
+  return items
+    .map((item): HistoryEntry | null => {
+      const hash = typeof item.tx_hash === 'string' ? item.tx_hash : null;
+      const value = toBigInt(item.total?.value);
+      const token = toAddress(item.token?.address);
+      if (hash === null || value === null) return null;
+      if (wanted !== null && token !== wanted) return null;
+
+      const from = toAddress(item.from?.hash);
+      const to = toAddress(item.to?.hash);
+
+      let direction: TransferDirection = 'in';
+      if (self !== null && from === self && to === self) direction = 'self';
+      else if (self !== null && from === self) direction = 'out';
+
+      const timestamp = typeof item.timestamp === 'string' ? new Date(item.timestamp) : null;
+
+      return {
+        hash,
+        direction,
+        value,
+        counterparty: direction === 'out' ? to : from,
+        timestamp: timestamp !== null && !Number.isNaN(timestamp.getTime()) ? timestamp : null,
+        // A transfer log only exists if the transaction succeeded; a reverted
+        // one emits nothing.
+        succeeded: true,
+        // The fee belongs to the transaction, not to this log, and charging it
+        // to the token amount would misreport both.
+        fee: null,
+      };
+    })
+    .filter((entry): entry is HistoryEntry => entry !== null)
+    .slice(0, limit);
+}
+
 /** A short, human date for a history row. */
 export function formatWhen(timestamp: Date | null): string {
   if (timestamp === null) return 'Pending';
