@@ -28,6 +28,12 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Ninja Wallet uses the camera only to read payment QR codes on this device."
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Ninja Wallet uses Face ID to unlock your wallet."

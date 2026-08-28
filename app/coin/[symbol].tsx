@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Button, Card, CoinIcon, HistoryRow, ScreenBackground, ScreenHeader } from '@/components';
 import { assetsForNetwork } from '@/wallet/assets';
 import { formatCoin } from '@/wallet/chain';
-import { fiatValue, formatUsd, networkHasFiatValue } from '@/wallet/prices';
+import { fiatValue, formatFiat, networkHasFiatValue } from '@/wallet/prices';
 import { usePrices } from '@/wallet/usePrices';
 import { useBalance } from '@/wallet/useBalance';
 import { useHistory } from '@/wallet/useHistory';
@@ -30,7 +30,7 @@ import { colors, spacing, typography } from '@/theme';
  */
 export default function CoinDetail() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
-  const { network, addresses } = useWallet();
+  const { network, addresses, currency } = useWallet();
   const balance = useBalance(network, addresses?.evm ?? null);
 
   const asset = assetsForNetwork(network).find((candidate) => candidate.symbol === symbol);
@@ -40,7 +40,7 @@ export default function CoinDetail() {
   const history = useHistory(network, isNative ? (addresses?.evm ?? null) : null);
 
   const showFiat = networkHasFiatValue(network);
-  const { prices } = usePrices(showFiat ? [symbol] : []);
+  const { prices } = usePrices(showFiat ? [symbol] : [], currency);
   const price = prices[symbol];
   const holdingFiat =
     isNative && balance.value !== null && price !== undefined
@@ -75,13 +75,13 @@ export default function CoinDetail() {
               : `— ${symbol}`}
           </Text>
           {holdingFiat !== null ? (
-            <Text style={styles.fiat}>{formatUsd(holdingFiat)}</Text>
+            <Text style={styles.fiat}>{formatFiat(holdingFiat, currency)}</Text>
           ) : null}
 
           <Text style={styles.network}>{isNative ? network.name : 'Bitcoin mainnet'}</Text>
 
           {price !== undefined ? (
-            <Text style={styles.spot}>1 {symbol} = {formatUsd(price)}</Text>
+            <Text style={styles.spot}>1 {symbol} = {formatFiat(price, currency)}</Text>
           ) : null}
         </View>
 

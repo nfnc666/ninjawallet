@@ -1,6 +1,6 @@
 import {
   fiatValue,
-  formatUsd,
+  formatFiat,
   fetchPrices,
   isPriceable,
   networkHasFiatValue,
@@ -113,20 +113,39 @@ describe('fiatValue', () => {
   });
 });
 
-describe('formatUsd', () => {
+describe('formatFiat', () => {
   it('shows two decimals for ordinary amounts', () => {
-    expect(formatUsd(3200.456)).toBe('$3,200.46');
+    expect(formatFiat(3200.456)).toBe('$3,200.46');
   });
 
   it('shows more precision for sub-dollar amounts, which would round to $0.00', () => {
-    expect(formatUsd(0.0123)).toBe('$0.0123');
+    expect(formatFiat(0.0123)).toBe('$0.0123');
   });
 
   it('formats zero plainly', () => {
-    expect(formatUsd(0)).toBe('$0.00');
+    expect(formatFiat(0)).toBe('$0.00');
   });
 
   it('shows a dash rather than NaN', () => {
-    expect(formatUsd(Number.NaN)).toBe('—');
+    expect(formatFiat(Number.NaN)).toBe('—');
+  });
+
+  it('uses the selected currency’s symbol', () => {
+    expect(formatFiat(1200, 'eur')).toContain('€');
+    expect(formatFiat(1200, 'gbp')).toContain('£');
+  });
+});
+
+describe('fetchPrices currency', () => {
+  it('asks the service for the selected currency and reads that field', async () => {
+    mockFetch({ body: { ethereum: { eur: 2950 } } });
+    await expect(fetchPrices(['ETH'], 'eur')).resolves.toEqual({ ETH: 2950 });
+    expect(String((global.fetch as jest.Mock).mock.calls[0][0])).toContain('vs_currencies=eur');
+  });
+
+  it('ignores a price returned in a currency that was not asked for', async () => {
+    // Reading the wrong field would show a euro figure with a dollar sign.
+    mockFetch({ body: { ethereum: { usd: 3200 } } });
+    await expect(fetchPrices(['ETH'], 'eur')).resolves.toEqual({});
   });
 });

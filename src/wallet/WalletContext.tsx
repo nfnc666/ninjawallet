@@ -18,9 +18,11 @@ import {
   unlockWallet,
   type SaveOptions,
 } from './keystore';
+import { DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from './currency';
 import { DEFAULT_NETWORK_ID, NETWORKS, type NetworkConfig, type NetworkId } from './networks';
 
 const NETWORK_PREF_KEY = 'ninjawallet.network.v1';
+const CURRENCY_PREF_KEY = 'ninjawallet.currency.v1';
 
 /** Lock the wallet after this long in the background. */
 const AUTO_LOCK_MS = 2 * 60 * 1000;
@@ -31,6 +33,8 @@ interface WalletState {
   status: WalletStatus;
   addresses: DerivedAddresses | null;
   network: NetworkConfig;
+  /** Display currency for prices. A view setting; it never affects a key. */
+  currency: CurrencyCode;
   /** Why `status` is 'error'. Null in every other state. */
   storageError: string | null;
 }
@@ -43,6 +47,7 @@ interface WalletActions {
   /** Wipes the wallet from the device. */
   forgetWallet: () => Promise<void>;
   setNetwork: (id: NetworkId) => Promise<void>;
+  setCurrency: (code: CurrencyCode) => Promise<void>;
   /** Re-reads secure storage after an 'error' state. */
   retryLoad: () => void;
   /**
@@ -61,6 +66,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<WalletStatus>('loading');
   const [addresses, setAddresses] = useState<DerivedAddresses | null>(null);
   const [networkId, setNetworkId] = useState<NetworkId>(DEFAULT_NETWORK_ID);
+  const [currency, setCurrencyState] = useState<CurrencyCode>(DEFAULT_CURRENCY);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [loadNonce, setLoadNonce] = useState(0);
 
@@ -74,14 +80,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const [exists, savedNetwork] = await Promise.all([
+        const [exists, savedNetwork, savedCurrency] = await Promise.all([
           hasWallet(),
           SecureStore.getItemAsync(NETWORK_PREF_KEY),
+          SecureStore.getItemAsync(CURRENCY_PREF_KEY),
         ]);
         if (cancelled) return;
 
         if (savedNetwork !== null && savedNetwork in NETWORKS) {
           setNetworkId(savedNetwork as NetworkId);
+        }
+        if (savedCurrency !== null && isCurrencyCode(savedCurrency)) {
+          setCurrencyState(savedCurrency);
         }
         setStorageError(null);
         setStatus(exists ? 'locked' : 'no-wallet');
@@ -152,6 +162,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     await SecureStore.setItemAsync(NETWORK_PREF_KEY, id);
   }, []);
 
+  const setCurrency = useCallback(async (code: CurrencyCode) => {
+    setCurrencyState(code);
+    await SecureStore.setItemAsync(CURRENCY_PREF_KEY, code);
+  }, []);
+
   const withPhrase = useCallback(async <T,>(fn: (phrase: string) => Promise<T>): Promise<T> => {
     const phrase = phraseRef.current;
     if (phrase === null) throw new Error('Wallet is locked.');
@@ -169,12 +184,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       status,
       addresses,
       network: NETWORKS[networkId],
+      currency,
       storageError,
       createWallet,
       unlock,
       lock,
       forgetWallet,
       setNetwork,
+      setCurrency,
       withPhrase,
       retryLoad,
     }),
@@ -182,12 +199,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       status,
       addresses,
       networkId,
+      currency,
       storageError,
       createWallet,
       unlock,
       lock,
       forgetWallet,
       setNetwork,
+      setCurrency,
       withPhrase,
       retryLoad,
     ],

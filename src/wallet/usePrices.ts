@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import type { CurrencyCode } from './currency';
+import { DEFAULT_CURRENCY } from './currency';
 import { fetchPrices } from './prices';
 
 export interface PricesState {
@@ -30,25 +32,32 @@ const EMPTY: Record<string, number> = {};
  * The result is keyed by the symbol set, so prices fetched for one set are
  * never shown against another.
  */
-export function usePrices(symbols: string[]): PricesState {
+export function usePrices(
+  symbols: string[],
+  currency: CurrencyCode = DEFAULT_CURRENCY,
+): PricesState {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [nonce, setNonce] = useState(0);
 
   // Sorted so a re-render with an equivalent array does not refetch.
-  const key = [...symbols].sort().join(',');
+  // The currency is part of the key: prices fetched in one currency must never
+  // be displayed against another.
+  const key = `${currency}|${[...symbols].sort().join(',')}`;
 
   const refresh = useCallback(() => {
     setRefreshing(true);
     setNonce((n) => n + 1);
   }, []);
 
+  const symbolsKey = key.slice(key.indexOf('|') + 1);
+
   useEffect(() => {
-    if (key === '') return;
+    if (symbolsKey === '') return;
 
     let cancelled = false;
 
-    fetchPrices(key.split(','))
+    fetchPrices(symbolsKey.split(','), currency)
       .then((prices) => {
         if (!cancelled) setLoaded({ key, prices, error: null });
       })
@@ -67,14 +76,14 @@ export function usePrices(symbols: string[]): PricesState {
     return () => {
       cancelled = true;
     };
-  }, [key, nonce]);
+  }, [key, symbolsKey, currency, nonce]);
 
   const current = loaded !== null && loaded.key === key ? loaded : null;
 
   return {
     prices: current?.prices ?? EMPTY,
     error: current?.error ?? null,
-    loading: key !== '' && (current === null || refreshing),
+    loading: symbolsKey !== '' && (current === null || refreshing),
     refresh,
   };
 }

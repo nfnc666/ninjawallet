@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 
 import { Button, Card, ScreenBackground, ScreenHeader, TextField } from '@/components';
 import { shortenAddress } from '@/wallet/chain';
+import { findCurrency } from '@/wallet/currency';
 import { unlockWallet, WrongPasscodeError } from '@/wallet/keystore';
 import { NETWORKS, type NetworkId } from '@/wallet/networks';
 import { useWallet } from '@/wallet/WalletContext';
@@ -12,7 +13,7 @@ import { colors, radius, spacing, typography } from '@/theme';
 
 /** figma 249:3595 ("setting") — grouped rows on the dark surface. */
 export default function Settings() {
-  const { network, setNetwork, addresses, lock, forgetWallet } = useWallet();
+  const { network, setNetwork, addresses, currency, lock, forgetWallet } = useWallet();
   const [revealPasscode, setRevealPasscode] = useState('');
   const [revealedPhrase, setRevealedPhrase] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
@@ -105,12 +106,52 @@ export default function Settings() {
           ) : null}
         </Section>
 
+        <Section title="Display">
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/currency')}
+            accessibilityRole="button"
+          >
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Currency</Text>
+              <Text style={styles.rowSubtitle}>
+                {findCurrency(currency)?.name ?? currency.toUpperCase()}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/market')}
+            accessibilityRole="button"
+          >
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Markets</Text>
+              <Text style={styles.rowSubtitle}>Prices and 24-hour movers</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+        </Section>
+
         <Section title="Addresses">
           <AddressRow label="Ethereum" value={addresses?.evm ?? null} />
           <AddressRow label="Bitcoin" value={addresses?.bitcoin ?? null} />
         </Section>
 
         <Section title="Security">
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/security')}
+            accessibilityRole="button"
+          >
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Security</Text>
+              <Text style={styles.rowSubtitle}>Backup, passcode and lock</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => {
@@ -190,6 +231,18 @@ export default function Settings() {
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Help</Text>
               <Text style={styles.rowSubtitle}>What can and cannot be recovered</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/terms')}
+            accessibilityRole="button"
+          >
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Terms</Text>
+              <Text style={styles.rowSubtitle}>What this software does and does not do</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </Pressable>

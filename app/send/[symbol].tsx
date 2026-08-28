@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Linking,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,11 +11,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { isAddress } from 'ethers';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { Button, Card, CoinIcon, ScreenBackground, ScreenHeader, TextField } from '@/components';
 import { formatCoin, parseCoin, quoteTransfer, sendNativeCoin, type FeeQuote } from '@/wallet/chain';
 import { useBalance } from '@/wallet/useBalance';
+import { takeScannedPayment } from '@/wallet/scanResult';
 import { useWallet } from '@/wallet/WalletContext';
 import { colors, radius, spacing, typography } from '@/theme';
 
@@ -39,6 +41,22 @@ export default function SendScreen() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Picked up when the scanner closes. Reading it here rather than through a
+  // router param keeps the address out of the navigation URL.
+  useFocusEffect(
+    useCallback(() => {
+      const scanned = takeScannedPayment();
+      if (scanned === null) return;
+
+      setTo(scanned.address);
+      setStage('compose');
+      setError(null);
+      // A payment code may request an amount; honour it, but never silently —
+      // it lands in the field the user still has to confirm.
+      if (scanned.amount !== null) setAmount(scanned.amount);
+    }, []),
+  );
 
   if (symbol !== network.currencySymbol) {
     return (
@@ -156,6 +174,16 @@ export default function SendScreen() {
             spellCheck={false}
             error={
               to.trim() !== '' && !recipientValid ? 'That is not a valid address.' : undefined
+            }
+            trailing={
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Scan a QR code"
+                hitSlop={12}
+                onPress={() => router.push({ pathname: '/scan', params: { chain: 'evm' } })}
+              >
+                <Ionicons name="qr-code-outline" size={20} color={colors.text} />
+              </Pressable>
             }
           />
 
