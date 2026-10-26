@@ -1,0 +1,23 @@
+# Builds the iOS app in Expo's cloud and hands it to TestFlight.
+#
+# There is deliberately no `on:` trigger. A workflow without one runs only
+# when it is started by hand — from the EAS dashboard in a browser, or with
+# `eas workflow:run`. That is what makes this usable without a computer, and
+# it means a build never starts by itself: each run costs build quota, and
+# each submission puts a binary in front of Apple.
+name: TestFlight
+
+jobs:
+  build_ios:
+    name: Build iOS
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit_ios:
+    name: Submit to TestFlight
+    type: submit
+    needs: [build_ios]
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}

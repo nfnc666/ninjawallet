@@ -30,13 +30,36 @@ Settings and send one to yourself before trusting it with anything else.
 
 ## Building for TestFlight
 
-Expo Go is for development. A build your testers install from TestFlight needs
-an **Apple Developer Program** membership (99 USD/year) and goes through EAS:
+Expo Go needs a Metro dev server, so it needs a computer on the same network.
+Everything below runs in Expo's cloud instead and can be started from a phone
+browser — but it needs an **Apple Developer Program** membership
+(99 USD/year). Without one you cannot install your own build on your own
+iPhone at all: the free 7-day sideload route needs Xcode, which needs a Mac.
+
+From a computer:
 
 ```bash
 npx eas-cli login
 npx eas-cli build --platform ios --profile production --auto-submit
 ```
+
+Without one, after the project has been linked to an Expo account once
+(`eas init`, which writes `extra.eas.projectId` into **app.json**), builds can
+be started entirely from a browser:
+
+* **EAS dashboard** — the project's build list has a *Build from GitHub*
+  button: pick a branch, a platform and a profile.
+* **A pull-request label** — adding `eas-build-ios:production` to a PR starts
+  that build and reports it back in the PR's checks.
+* **`.eas/workflows/testflight.yml`** — builds for iOS and hands the result to
+  TestFlight. It has no `on:` trigger on purpose, so it only ever runs when
+  started by hand: every run costs build quota, and every submission puts a
+  binary in front of Apple.
+
+Expo documents one prerequisite for the GitHub route: a build has to have
+succeeded once from a local machine per platform, because iOS signing
+credentials are set up interactively. They can also be set up in the
+dashboard with an App Store Connect API key.
 
 `eas.json` holds the profiles: `preview` builds an internally distributed
 build (an `.ipa` for registered devices, an `.apk` on Android), `production`

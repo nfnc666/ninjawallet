@@ -8,16 +8,24 @@
       "distribution": "internal",
       "channel": "preview",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "latest"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "latest"
       }
     },
     "production": {
       "distribution": "store",
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "ios": {
+        "image": "latest"
+      },
+      "android": {
+        "image": "latest"
+      }
     }
   },
   "submit": {
