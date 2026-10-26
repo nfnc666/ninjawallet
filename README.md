@@ -28,6 +28,43 @@ simulator instead, if you have one.
 It starts on the Sepolia testnet. Get free test coins from the faucet linked in
 Settings and send one to yourself before trusting it with anything else.
 
+## Building for TestFlight
+
+Expo Go is for development. A build your testers install from TestFlight needs
+an **Apple Developer Program** membership (99 USD/year) and goes through EAS:
+
+```bash
+npx eas-cli login
+npx eas-cli build --platform ios --profile production --auto-submit
+```
+
+`eas.json` holds the profiles: `preview` builds an internally distributed
+build (an `.ipa` for registered devices, an `.apk` on Android), `production`
+builds for TestFlight and the App Store. Build numbers are tracked by EAS
+(`appVersionSource: remote`), so they are not kept in this repository.
+
+Then in App Store Connect, under the app's TestFlight tab:
+
+* **Internal testing** — your own App Store Connect team, up to 100 testers,
+  available as soon as the build finishes processing. **No Beta App Review.**
+* **External testing** — up to 10,000 testers, but the group's first build has
+  to clear Apple's Beta App Review.
+
+Two things to settle before paying for anything:
+
+* **Apple requires wallet apps to come from an organization.** App Store
+  Review Guideline 3.1.5 allows apps that store virtual currency only from
+  developers enrolled as an organization, which needs a D-U-N-S number — an
+  individual account is not enough. This bites at the App Store and at
+  external TestFlight; internal testing is not reviewed. Check the current
+  wording at <https://developer.apple.com/app-store/review/guidelines/>
+  before enrolling, because this section is revised often.
+* **Export compliance is yours to declare.** App Store Connect asks whether
+  the app uses non-exempt encryption (`ITSAppUsesNonExemptEncryption`). This
+  wallet does its own scrypt and AES, so the answer is a legal statement about
+  this app's cryptography and is deliberately **not** pre-set in `app.json`.
+  Answer it yourself.
+
 Optional configuration, all via `EXPO_PUBLIC_*` env vars:
 
 | Variable | Effect |
