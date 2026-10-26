@@ -56,10 +56,42 @@ be started entirely from a browser:
   started by hand: every run costs build quota, and every submission puts a
   binary in front of Apple.
 
-Expo documents one prerequisite for the GitHub route: a build has to have
-succeeded once from a local machine per platform, because iOS signing
-credentials are set up interactively. They can also be set up in the
-dashboard with an App Store Connect API key.
+### The one step that still needs a computer
+
+Apple's signing credentials — the distribution certificate, the provisioning
+profile and an App Store Connect API key — are set up interactively, and every
+route Expo documents for that is the CLI:
+
+```bash
+npx eas-cli credentials --platform ios
+```
+
+It asks for an Apple login with two-factor, which is why no cloud trigger can
+do it. Expo also states the GitHub route needs one build that succeeded from a
+local machine per platform, for the same reason. Once an **App Store Connect
+API key** is assigned to the app, later builds and submissions run
+non-interactively — that is the point of the key — so only the first time
+needs a machine.
+
+Non-interactive submission also needs the app's App Store Connect ID in the
+submit profile:
+
+```json eas.json
+{
+  "submit": {
+    "production": {
+      "ios": { "ascAppId": "1234567890" }
+    }
+  }
+}
+```
+
+Find it in App Store Connect under **Apps → your app → General → App
+Information**, listed as **Apple ID**. It is an identifier, not a secret.
+
+An App Store Connect API key **is** a secret: it belongs in EAS, uploaded
+through `eas credentials` or the dashboard, never in this repository and never
+in `eas.json` as a file path.
 
 `eas.json` holds the profiles: `preview` builds an internally distributed
 build (an `.ipa` for registered devices, an `.apk` on Android), `production`
